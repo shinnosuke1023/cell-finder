@@ -1,2 +1,0 @@
-C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\java\com\example\celllogger\MainActivity.kt
-C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\java\com\example\celllogger\CellLoggerService.kt
