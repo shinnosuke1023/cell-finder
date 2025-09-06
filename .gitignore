@@ -1,0 +1,81 @@
+# Android Studio / Gradle
+.gradle/
+/build/
+**/build/
+
+# Gradle wrapper - keep the jar but ignore other wrapper files if any
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration
+local.properties
+*.iml
+.idea/
+*.iws
+*.ipr
+
+# IntelliJ
+out/
+
+# Android specific
+captures/
+.externalNativeBuild/
+.cxx/
+generated/
+output.json
+
+# Build outputs
+*.apk
+*.ap_
+*.aab
+
+# Signing files
+*.jks
+*.keystore
+
+# Google services (may contain keys)
+google-services.json
+
+# Kotlin/Java
+*.class
+*.log
+
+# Misc
+.DS_Store
+Thumbs.db
+*.orig
+
+# Node (if present)
+node_modules/
+
+# Python server
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.pyo
+pip-log.txt
+
+# IDE/editor folders
+.vscode/
+
+# Temporary files
+*.swp
+*~
+
+# Secrets / env files
+.env
+
+# Coverage
+coverage/
+coverage.xml
+
+# Lock files that can be regenerated
+/.gradle/
+
+# OS generated files
+ehthumbs.db
+Icon
+
+# End of file
+
