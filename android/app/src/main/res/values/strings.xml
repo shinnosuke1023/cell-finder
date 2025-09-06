@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CellLogger</string>
+    <string name="status_logging_started">Status: Logging started</string>
+    <string name="status_logging_stopped">Status: Logging stopped</string>
+    <string name="status_permission_denied">Status: Permission denied</string>
+    <string name="status_sim_state">Status: SIM state = %1$s</string>
+    <string name="status_not_started">Status: Not started</string>
+    <string name="btn_start_logging">Start Logging</string>
+    <string name="btn_stop_logging">Stop Logging</string>
+</resources>
+

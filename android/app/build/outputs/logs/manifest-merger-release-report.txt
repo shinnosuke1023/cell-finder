@@ -1,0 +1,182 @@
+-- Merging decision tree log ---
+manifest
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:2:1-28:12
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:2:1-28:12
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:2:1-28:12
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:2:1-28:12
+MERGED from [com.google.android.gms:play-services-location:21.0.1] C:\Users\kureshin\.gradle\caches\8.13\transforms\53ce2bb8b2096d01987cd0e9d112b57f\transformed\jetified-play-services-location-21.0.1\AndroidManifest.xml:2:1-9:12
+MERGED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:16:1-24:12
+MERGED from [com.google.android.gms:play-services-tasks:18.0.2] C:\Users\kureshin\.gradle\caches\8.13\transforms\c403339c7c893ccf7ece1eb90fc45fcc\transformed\jetified-play-services-tasks-18.0.2\AndroidManifest.xml:2:1-6:12
+MERGED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:16:1-26:12
+MERGED from [androidx.fragment:fragment:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\94c3f4c5454ae6628b8c7aecadb13dee\transformed\fragment-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\373a574cc0053bc3506b969d6bc62c48\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\096d8845fc528f12b2928cf57c67604f\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\29bca0f534616bee80a1b3a2ce3e7b51\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\af35f9ea2e7b313ff5281dd21d40df65\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\5e9fcd24b552692b5e41b73ba38c8431\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\52aa0dbccc7ef4092f8e674d3e043d79\transformed\drawerlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\d2ff14301b0bbf288776cb1eb8d0b344\transformed\slidingpanelayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\6acae4fbd53f0dadb15cf91430bd81d0\transformed\customview-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\4fdbdd2b44a42a95b5445edfb43a5250\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\e37623f8db12b68842caa7636bbbf3dd\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core:1.2.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\AndroidManifest.xml:17:1-26:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\106572b8e855dd4a5dacf81515725875\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\88019d5f674e7dc2a56bd8150df5a6d9\transformed\lifecycle-runtime-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\87c249109cb1be73b88b524ef647d391\transformed\lifecycle-viewmodel-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\dfd087e74ed4d8d9409fdbebd1dca6ee\transformed\lifecycle-livedata-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\162b8739e616a33458028643b1bf1593\transformed\lifecycle-livedata-core-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.arch.core:core-runtime:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\179d0e13f8bbde1aa86f70be51c083e7\transformed\core-runtime-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\a4a4d9f2db0b5fc2e38596ded1dc4e17\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\b7891df7fc77ab31b9c2bc638cacfbc9\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\a1774cfe05fd4df6dca7ef2b8a2a5c9e\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\985b2ee6e28677e9baef04f1e7be47c9\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.print:print:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0585625aada595b8ac79517bb5f032ca\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
+	package
+		INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+	android:versionName
+		INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+	android:versionCode
+		INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:4:5-79
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:4:22-76
+uses-permission#android.permission.ACCESS_COARSE_LOCATION
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:5:5-81
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:5:22-78
+uses-permission#android.permission.READ_PHONE_STATE
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:6:5-75
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:6:22-72
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:7:5-67
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:7:22-64
+application
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:9:5-27:19
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:9:5-27:19
+MERGED from [com.google.android.gms:play-services-location:21.0.1] C:\Users\kureshin\.gradle\caches\8.13\transforms\53ce2bb8b2096d01987cd0e9d112b57f\transformed\jetified-play-services-location-21.0.1\AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-location:21.0.1] C:\Users\kureshin\.gradle\caches\8.13\transforms\53ce2bb8b2096d01987cd0e9d112b57f\transformed\jetified-play-services-location-21.0.1\AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:19:5-23:19
+MERGED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:19:5-23:19
+MERGED from [com.google.android.gms:play-services-tasks:18.0.2] C:\Users\kureshin\.gradle\caches\8.13\transforms\c403339c7c893ccf7ece1eb90fc45fcc\transformed\jetified-play-services-tasks-18.0.2\AndroidManifest.xml:5:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.0.2] C:\Users\kureshin\.gradle\caches\8.13\transforms\c403339c7c893ccf7ece1eb90fc45fcc\transformed\jetified-play-services-tasks-18.0.2\AndroidManifest.xml:5:5-20
+MERGED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:20:5-24:19
+MERGED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:20:5-24:19
+MERGED from [androidx.core:core:1.2.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\AndroidManifest.xml:24:5-89
+MERGED from [androidx.core:core:1.2.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\AndroidManifest.xml:24:5-89
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\106572b8e855dd4a5dacf81515725875\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\106572b8e855dd4a5dacf81515725875\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:24:5-25:19
+	android:extractNativeLibs
+		INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.2.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\AndroidManifest.xml:24:18-86
+	android:label
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:11:9-35
+	android:icon
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:12:9-58
+	android:allowBackup
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:10:9-35
+service#com.example.celllogger.CellLoggerService
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:14:9-17:40
+	android:enabled
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:16:13-35
+	android:exported
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:17:13-37
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:15:13-68
+activity#com.example.celllogger.MainActivity
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:19:9-26:20
+	android:exported
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:21:13-36
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:20:13-63
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:22:17-25:33
+action#android.intent.action.MAIN
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:23:21-73
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:23:29-70
+category#android.intent.category.LAUNCHER
+ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:24:21-81
+	android:name
+		ADDED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml:24:31-78
+uses-sdk
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+MERGED from [com.google.android.gms:play-services-location:21.0.1] C:\Users\kureshin\.gradle\caches\8.13\transforms\53ce2bb8b2096d01987cd0e9d112b57f\transformed\jetified-play-services-location-21.0.1\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-location:21.0.1] C:\Users\kureshin\.gradle\caches\8.13\transforms\53ce2bb8b2096d01987cd0e9d112b57f\transformed\jetified-play-services-location-21.0.1\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-tasks:18.0.2] C:\Users\kureshin\.gradle\caches\8.13\transforms\c403339c7c893ccf7ece1eb90fc45fcc\transformed\jetified-play-services-tasks-18.0.2\AndroidManifest.xml:4:5-43
+MERGED from [com.google.android.gms:play-services-tasks:18.0.2] C:\Users\kureshin\.gradle\caches\8.13\transforms\c403339c7c893ccf7ece1eb90fc45fcc\transformed\jetified-play-services-tasks-18.0.2\AndroidManifest.xml:4:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:18:5-43
+MERGED from [androidx.fragment:fragment:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\94c3f4c5454ae6628b8c7aecadb13dee\transformed\fragment-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.fragment:fragment:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\94c3f4c5454ae6628b8c7aecadb13dee\transformed\fragment-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\373a574cc0053bc3506b969d6bc62c48\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\373a574cc0053bc3506b969d6bc62c48\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\096d8845fc528f12b2928cf57c67604f\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\096d8845fc528f12b2928cf57c67604f\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\29bca0f534616bee80a1b3a2ce3e7b51\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\29bca0f534616bee80a1b3a2ce3e7b51\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\af35f9ea2e7b313ff5281dd21d40df65\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\af35f9ea2e7b313ff5281dd21d40df65\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\5e9fcd24b552692b5e41b73ba38c8431\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\5e9fcd24b552692b5e41b73ba38c8431\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\52aa0dbccc7ef4092f8e674d3e043d79\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\52aa0dbccc7ef4092f8e674d3e043d79\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\d2ff14301b0bbf288776cb1eb8d0b344\transformed\slidingpanelayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\d2ff14301b0bbf288776cb1eb8d0b344\transformed\slidingpanelayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\6acae4fbd53f0dadb15cf91430bd81d0\transformed\customview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\6acae4fbd53f0dadb15cf91430bd81d0\transformed\customview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\4fdbdd2b44a42a95b5445edfb43a5250\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\4fdbdd2b44a42a95b5445edfb43a5250\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\e37623f8db12b68842caa7636bbbf3dd\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\e37623f8db12b68842caa7636bbbf3dd\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.2.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.core:core:1.2.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\106572b8e855dd4a5dacf81515725875\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\106572b8e855dd4a5dacf81515725875\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\88019d5f674e7dc2a56bd8150df5a6d9\transformed\lifecycle-runtime-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\88019d5f674e7dc2a56bd8150df5a6d9\transformed\lifecycle-runtime-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\87c249109cb1be73b88b524ef647d391\transformed\lifecycle-viewmodel-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\87c249109cb1be73b88b524ef647d391\transformed\lifecycle-viewmodel-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\dfd087e74ed4d8d9409fdbebd1dca6ee\transformed\lifecycle-livedata-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\dfd087e74ed4d8d9409fdbebd1dca6ee\transformed\lifecycle-livedata-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\162b8739e616a33458028643b1bf1593\transformed\lifecycle-livedata-core-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\162b8739e616a33458028643b1bf1593\transformed\lifecycle-livedata-core-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\179d0e13f8bbde1aa86f70be51c083e7\transformed\core-runtime-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\179d0e13f8bbde1aa86f70be51c083e7\transformed\core-runtime-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\a4a4d9f2db0b5fc2e38596ded1dc4e17\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\a4a4d9f2db0b5fc2e38596ded1dc4e17\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\b7891df7fc77ab31b9c2bc638cacfbc9\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\b7891df7fc77ab31b9c2bc638cacfbc9\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\a1774cfe05fd4df6dca7ef2b8a2a5c9e\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\a1774cfe05fd4df6dca7ef2b8a2a5c9e\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\985b2ee6e28677e9baef04f1e7be47c9\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\985b2ee6e28677e9baef04f1e7be47c9\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0585625aada595b8ac79517bb5f032ca\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0585625aada595b8ac79517bb5f032ca\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+	android:targetSdkVersion
+		INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\AndroidManifest.xml
+activity#com.google.android.gms.common.api.GoogleApiActivity
+ADDED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:20:9-22:45
+	android:exported
+		ADDED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:22:19-43
+	android:theme
+		ADDED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:21:19-78
+	android:name
+		ADDED from [com.google.android.gms:play-services-base:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:20:19-85
+meta-data#com.google.android.gms.version
+ADDED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:21:9-23:69
+	android:value
+		ADDED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:23:13-66
+	android:name
+		ADDED from [com.google.android.gms:play-services-basement:18.1.0] C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:22:13-58

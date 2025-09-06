@@ -1,0 +1,16 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.11.0'  // 例：適切なバージョンを指定
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.21"  // Kotlinプラグインのバージョン指定
+    }
+}
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

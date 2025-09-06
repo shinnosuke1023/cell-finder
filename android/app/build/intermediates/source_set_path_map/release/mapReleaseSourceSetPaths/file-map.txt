@@ -1,0 +1,11 @@
+com.example.celllogger.app-jetified-play-services-base-18.1.0-0 C:\Users\kureshin\.gradle\caches\8.13\transforms\0c0f2991d757c232738cc77ffd378e95\transformed\jetified-play-services-base-18.1.0\res
+com.example.celllogger.app-core-1.2.0-1 C:\Users\kureshin\.gradle\caches\8.13\transforms\57aa0da487b64762cdb69abd2604c7b2\transformed\core-1.2.0\res
+com.example.celllogger.app-coordinatorlayout-1.0.0-2 C:\Users\kureshin\.gradle\caches\8.13\transforms\5e9fcd24b552692b5e41b73ba38c8431\transformed\coordinatorlayout-1.0.0\res
+com.example.celllogger.app-jetified-play-services-basement-18.1.0-3 C:\Users\kureshin\.gradle\caches\8.13\transforms\eb9fc2f8b4e547d81f37f7a3c38f21e4\transformed\jetified-play-services-basement-18.1.0\res
+com.example.celllogger.app-pngs-4 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\build\generated\res\pngs\release
+com.example.celllogger.app-resValues-5 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\build\generated\res\resValues\release
+com.example.celllogger.app-mergeReleaseResources-6 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+com.example.celllogger.app-mergeReleaseResources-7 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+com.example.celllogger.app-release-8 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\build\intermediates\merged_res\release\mergeReleaseResources
+com.example.celllogger.app-main-9 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\main\res
+com.example.celllogger.app-release-10 C:\Users\kureshin\Downloads\cell-logger-updated\cell-logger\android\app\src\release\res
