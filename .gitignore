@@ -9,7 +9,6 @@
 # Local configuration
 local.properties
 *.iml
-.idea/
 *.iws
 *.ipr
 
