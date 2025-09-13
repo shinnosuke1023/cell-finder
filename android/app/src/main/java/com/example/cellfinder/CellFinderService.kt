@@ -99,24 +99,21 @@ class CellFinderService : Service() {
                     is CellInfoNr -> ci.cellSignalStrength.dbm
                     else -> null
                 }
-                Log.d(TAG, "Cell: type=$type, dbm=$dbm")
+                val cellId = extractCellId(ci)
+                Log.d(TAG, "Cell: type=$type, dbm=$dbm, cellId=$cellId")
 
                 // completeness checks
-                val hasIdentity = try {
-                    val ident = when (ci) {
-                        is CellInfoGsm -> ci.cellIdentity
-                        is CellInfoWcdma -> ci.cellIdentity
-                        is CellInfoLte -> ci.cellIdentity
-                        is CellInfoNr -> ci.cellIdentity
-                        else -> null
-                    }
-                    Log.d(TAG, "Cell identity: $ident")
-                    ident != null
-                } catch (_: Exception) {
-                    false
-                }
+                val hasIdentity = cellId != null
 
-                mapOf("type" to type, "dbm" to dbm, "hasIdentity" to hasIdentity)
+                mapOf(
+                    "type" to type,
+                    // サーバー側と合わせるフィールド名
+                    "rssi" to dbm,
+                    "cell_id" to cellId,
+                    // 追加情報（デバッグ用）
+                    "dbm" to dbm,
+                    "hasIdentity" to hasIdentity
+                )
             }
 
             val payload = mapOf(
@@ -133,6 +130,66 @@ class CellFinderService : Service() {
             sendJson(payload)
         }.addOnFailureListener { e ->
             Log.e(TAG, "Failed to get location: ${e.message}")
+        }
+    }
+
+    // 各無線方式ごとに基地局IDを抽出
+    private fun extractCellId(ci: CellInfo): String? {
+        return try {
+            when (ci) {
+                is CellInfoGsm -> {
+                    val id = ci.cellIdentity
+                    val cid = id.cid
+                    val lac = id.lac
+                    val mcc = id.mccString
+                    val mnc = id.mncString
+                    if (cid != Int.MAX_VALUE && cid != -1) {
+                        // なるべく一意性を高める
+                        "GSM:${mcc}-${mnc}:${lac}-${cid}"
+                    } else null
+                }
+                is CellInfoWcdma -> {
+                    val id = ci.cellIdentity
+                    val cid = id.cid
+                    val lac = id.lac
+                    val mcc = id.mccString
+                    val mnc = id.mncString
+                    if (cid != Int.MAX_VALUE && cid != -1) {
+                        "WCDMA:${mcc}-${mnc}:${lac}-${cid}"
+                    } else null
+                }
+                is CellInfoLte -> {
+                    val id = ci.cellIdentity
+                    val ciVal = id.ci // ECI
+                    val tac = id.tac
+                    val mcc = id.mccString
+                    val mnc = id.mncString
+                    if (ciVal != Int.MAX_VALUE && ciVal != -1) {
+                        "LTE:${mcc}-${mnc}:${tac}-${ciVal}"
+                    } else null
+                }
+                is CellInfoNr -> {
+                    val nrId = try { (ci as CellInfoNr).cellIdentity } catch (_: Exception) { null }
+                    if (nrId != null) {
+                        fun call(name: String): Any? = try {
+                            nrId.javaClass.getMethod(name).invoke(nrId)
+                        } catch (_: Exception) { null }
+                        val nci = call("getNci")
+                        val tac = call("getTac")
+                        val mcc = call("getMccString") ?: call("getMcc")
+                        val mnc = call("getMncString") ?: call("getMnc")
+                        if (nci != null) {
+                            "NR:${mcc}-${mnc}:${tac}-${nci}"
+                        } else {
+                            "NR:${nrId.toString()}"
+                        }
+                    } else null
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract cell id: ${e.message}")
+            null
         }
     }
 
