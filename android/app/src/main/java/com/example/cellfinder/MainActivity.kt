@@ -32,6 +32,7 @@ class MainActivity : Activity() {
         statusView = findViewById<TextView>(R.id.statusView)
         val btnStart = findViewById<Button>(R.id.btnStart)
         val btnStop = findViewById<Button>(R.id.btnStop)
+        val btnMap = findViewById<Button>(R.id.btnMap)
 
         Log.d(TAG, "UI components initialized")
 
@@ -54,6 +55,11 @@ class MainActivity : Activity() {
             stopService(Intent(this, CellFinderService::class.java))
             statusView.text = getString(R.string.status_logging_stopped)
             Log.i(TAG, "CellFinderService stopped")
+        }
+
+        btnMap.setOnClickListener {
+            Log.d(TAG, "Map button clicked")
+            startActivity(Intent(this, MapsActivity::class.java))
         }
 
         Log.d(TAG, "onCreate() completed")

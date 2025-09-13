@@ -8,4 +8,5 @@
     <string name="status_not_started">Status: Not started</string>
     <string name="btn_start_logging">Start Logging</string>
     <string name="btn_stop_logging">Stop Logging</string>
+    <string name="btn_show_map">Show Map</string>
 </resources>
