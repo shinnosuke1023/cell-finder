@@ -29,6 +29,7 @@ class CellFinderService : Service() {
 
     private val CHANNEL_ID = "cell_finder_channel"
     private lateinit var telephonyManager: TelephonyManager
+    private lateinit var cellDatabase: CellDatabase
     private val handler = Handler(Looper.getMainLooper())
     private val client = OkHttpClient()
     private val gson = Gson()
@@ -41,11 +42,15 @@ class CellFinderService : Service() {
         Log.i(TAG, "Service onCreate() called")
         super.onCreate()
         telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+        cellDatabase = CellDatabase(this)
         createNotificationChannel()
         startForeground(1, buildNotification())
         Log.i(TAG, "Service started in foreground with notification")
         handler.post(logRunnable)
         Log.i(TAG, "Logging runnable started with interval: ${POLL_INTERVAL_MS}ms")
+        
+        // Clean up old data periodically (keep last 24 hours)
+        cellDatabase.clearOldData(24)
     }
 
     private val logRunnable = object : Runnable {
@@ -127,9 +132,43 @@ class CellFinderService : Service() {
             )
 
             Log.i(TAG, "Sending payload: foundGsmType=$foundGsmType, anyTypeKnown=$anyTypeKnown, cellCount=${cells.size}")
+            
+            // Store data locally
+            storeDataLocally(payload, cells)
+            
+            // Also send to server if configured
             sendJson(payload)
         }.addOnFailureListener { e ->
             Log.e(TAG, "Failed to get location: ${e.message}")
+        }
+    }
+
+    private fun storeDataLocally(payload: Map<String, Any?>, cells: List<Map<String, Any?>>) {
+        try {
+            val timestamp = payload["timestamp"] as? Long ?: System.currentTimeMillis()
+            val lat = payload["lat"] as? Double
+            val lon = payload["lon"] as? Double
+            
+            val cellLogs = cells.mapNotNull { cellData ->
+                val type = cellData["type"] as? String
+                val rssi = cellData["rssi"] as? Int
+                val cellId = cellData["cell_id"] as? String
+                
+                // Only store if we have essential data
+                if (type != null || rssi != null || cellId != null) {
+                    CellLog(timestamp, lat, lon, type, rssi, cellId)
+                } else {
+                    null
+                }
+            }
+            
+            if (cellLogs.isNotEmpty()) {
+                cellDatabase.insertCellLogs(cellLogs)
+                Log.d(TAG, "Stored ${cellLogs.size} cell logs locally")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error storing data locally: ${e.message}", e)
         }
     }
 

@@ -12,13 +12,24 @@
         android:allowBackup="true"
         android:label="CellFinder"
         android:icon="@android:drawable/sym_def_app_icon"
+        android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
+
+        <!-- Google Maps API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_MAPS_API_KEY}" />
 
         <service
             android:name="com.example.cellfinder.CellFinderService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <activity
+            android:name="com.example.cellfinder.MapsActivity"
+            android:exported="false"
+            android:label="Cell Tower Map" />
 
         <activity
             android:name="com.example.cellfinder.MainActivity"
