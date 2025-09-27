@@ -38,6 +38,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val debugCircles = mutableListOf<Circle>()
     
     private var showDebugCircles = false
+    private var currentFilter = MapFilter.DEFAULT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,9 +97,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         backgroundExecutor.execute {
             try {
-                // Get recent cell logs
-                val recentLogs = cellDatabase.getRecentCellLogs(60) // Last 60 minutes
-                val cellLogsMap = cellDatabase.getCellLogsGroupedByCell(60)
+                // Get filtered cell logs based on current filter
+                val filteredLogs = cellDatabase.getFilteredCellLogs(currentFilter)
+                val cellLogsMap = cellDatabase.getFilteredCellLogsGroupedByCell(currentFilter)
                 
                 // Estimate base station positions
                 val estimatedPositions = BaseStationEstimator.estimateBaseStationPositions(
@@ -110,11 +111,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     useIntersectionMethod = true
                 )
                 
-                Log.d(TAG, "Found ${recentLogs.size} recent logs and ${estimatedPositions.size} estimated positions")
+                Log.d(TAG, "Found ${filteredLogs.size} filtered logs and ${estimatedPositions.size} estimated positions")
                 
                 // Update UI on main thread
                 handler.post {
-                    updateMapMarkers(recentLogs, estimatedPositions, cellLogsMap)
+                    updateMapMarkers(filteredLogs, estimatedPositions, cellLogsMap)
                 }
                 
             } catch (e: Exception) {
@@ -133,14 +134,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Clear existing markers and circles
         clearMapElements()
         
-        // Add cell tower observation markers (blue)
-        addCellObservationMarkers(cellLogs)
+        // Add cell tower observation markers (blue) if enabled in filter
+        if (currentFilter.showCellObservations) {
+            addCellObservationMarkers(cellLogs)
+        }
         
-        // Add estimated base station markers (red)
-        addBaseStationMarkers(estimatedPositions)
+        // Add estimated base station markers (red) if enabled in filter
+        if (currentFilter.showBaseStations) {
+            addBaseStationMarkers(estimatedPositions)
+        }
         
-        // Add debug circles if enabled
-        if (showDebugCircles) {
+        // Add debug circles if enabled in filter
+        if (currentFilter.showDebugCircles) {
             addDebugCircles(cellLogsMap)
         }
         
@@ -248,6 +253,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menu?.add(0, 1, 0, "Toggle Debug Circles")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         menu?.add(0, 2, 0, "Refresh Data")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 3, 0, "Filter Settings")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -258,9 +264,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 true
             }
             1 -> {
-                showDebugCircles = !showDebugCircles
+                // Toggle debug circles through filter
+                currentFilter = currentFilter.copy(showDebugCircles = !currentFilter.showDebugCircles)
                 updateMapData()
-                Log.d(TAG, "Debug circles toggled: $showDebugCircles")
+                Log.d(TAG, "Debug circles toggled: ${currentFilter.showDebugCircles}")
                 true
             }
             2 -> {
@@ -268,7 +275,34 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.d(TAG, "Manual data refresh triggered")
                 true
             }
+            3 -> {
+                showFilterDialog()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun showFilterDialog() {
+        backgroundExecutor.execute {
+            try {
+                val availableCellTypes = cellDatabase.getAvailableCellTypes()
+                
+                handler.post {
+                    val dialog = MapFilterDialog(
+                        context = this,
+                        currentFilter = currentFilter,
+                        availableCellTypes = availableCellTypes
+                    ) { newFilter ->
+                        currentFilter = newFilter
+                        updateMapData()
+                        Log.d(TAG, "Filter updated: $newFilter")
+                    }
+                    dialog.show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading cell types for filter dialog: ${e.message}", e)
+            }
         }
     }
 

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Time Window Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Time Window"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <RadioGroup
+            android:id="@+id/timeWindowGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+
+            <RadioButton
+                android:id="@+id/radio15min"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Last 15 minutes" />
+
+            <RadioButton
+                android:id="@+id/radio1hour"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Last 1 hour"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/radio6hours"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Last 6 hours" />
+
+            <RadioButton
+                android:id="@+id/radio24hours"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Last 24 hours" />
+
+        </RadioGroup>
+
+        <!-- RSSI Range Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RSSI Range (dBm)"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/enableRssiFilter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enable RSSI filtering"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/rssiRangeLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp"
+            android:enabled="false">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Min: "
+                android:layout_marginEnd="8dp" />
+
+            <EditText
+                android:id="@+id/minRssiInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="-140"
+                android:inputType="numberSigned"
+                android:layout_marginEnd="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Max: "
+                android:layout_marginEnd="8dp" />
+
+            <EditText
+                android:id="@+id/maxRssiInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="-20"
+                android:inputType="numberSigned" />
+
+        </LinearLayout>
+
+        <!-- Display Options Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Display Options"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/showCellObservations"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Show cell observations (blue markers)"
+            android:checked="true" />
+
+        <CheckBox
+            android:id="@+id/showBaseStations"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Show estimated base stations (red markers)"
+            android:checked="true" />
+
+        <CheckBox
+            android:id="@+id/showDebugCircles"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Show debug circles" />
+
+        <!-- Cell Types Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cell Types"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/enableCellTypeFilter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filter by cell types"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/cellTypesLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:enabled="false" />
+
+    </LinearLayout>
+
+</ScrollView>
