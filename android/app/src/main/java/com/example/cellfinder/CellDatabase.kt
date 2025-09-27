@@ -136,10 +136,49 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         return cellLogs
     }
 
+    fun getFilteredCellLogs(filter: MapFilter): List<CellLog> {
+        val allLogs = getRecentCellLogs(filter.timeWindowMinutes)
+        return allLogs.filter { filter.shouldShowCellLog(it) }
+    }
+
     fun getCellLogsGroupedByCell(windowMinutes: Int = 60): Map<String, List<CellLog>> {
         val logs = getRecentCellLogs(windowMinutes)
         return logs.filter { it.cellId != null }
                    .groupBy { it.cellId!! }
+    }
+
+    fun getFilteredCellLogsGroupedByCell(filter: MapFilter): Map<String, List<CellLog>> {
+        val logs = getFilteredCellLogs(filter)
+        return logs.filter { it.cellId != null }
+                   .groupBy { it.cellId!! }
+    }
+
+    fun getAvailableCellTypes(): List<String> {
+        val db = readableDatabase
+        val cursor = db.query(
+            true, // distinct
+            TABLE_LOGS,
+            arrayOf(COLUMN_TYPE),
+            "$COLUMN_TYPE IS NOT NULL",
+            null,
+            null,
+            null,
+            null,
+            null
+        )
+
+        val types = mutableListOf<String>()
+        cursor.use {
+            while (it.moveToNext()) {
+                val type = it.getString(it.getColumnIndexOrThrow(COLUMN_TYPE))
+                if (type != null && type.isNotBlank()) {
+                    types.add(type)
+                }
+            }
+        }
+        
+        Log.d(TAG, "Available cell types: $types")
+        return types.sorted()
     }
 
     fun clearOldData(retentionHours: Int = 24) {
