@@ -18,9 +18,11 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.maps.android.heatmaps.Gradient
 import com.google.maps.android.heatmaps.HeatmapTileProvider
 import com.google.maps.android.heatmaps.WeightedLatLng
 import java.util.concurrent.Executors
+import kotlin.math.floor
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -46,6 +48,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val cellMarkers = mutableListOf<Marker>()
     private val baseStationMarkers = mutableListOf<Marker>()
     private val debugCircles = mutableListOf<Circle>()
+    private val rssiCircles = mutableListOf<Circle>()
     private var heatmapTileOverlay: TileOverlay? = null
     
     // Data and state
@@ -56,6 +59,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     
     enum class DisplayMode(val displayName: String) {
         HEATMAP("Heatmap"),
+        RSSI_CIRCLES("RSSI Circles"),
         PINS("Pins")
     }
 
@@ -283,6 +287,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.d(TAG, "Creating heatmap visualization")
                 createHeatmap(filteredLogs)
             }
+            DisplayMode.RSSI_CIRCLES -> {
+                Log.d(TAG, "Creating RSSI circles visualization")
+                createRssiCircles(filteredLogs)
+            }
             DisplayMode.PINS -> {
                 Log.d(TAG, "Creating pin visualization")
                 createPinMarkers(filteredLogs)
@@ -299,56 +307,207 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun createHeatmap(cellLogs: List<CellLog>) {
-        Log.d(TAG, "Creating heatmap with ${cellLogs.size} cell logs")
-        val heatmapData = mutableListOf<WeightedLatLng>()
+        Log.d(TAG, "Creating RSSI-based heatmap with ${cellLogs.size} cell logs")
         
+        // Step 1: Grid-based bucketing to suppress density effects
+        val gridSize = 25.0 // meters
+        val gridMap = mutableMapOf<String, CellLog>()
+        
+        // Create grid buckets and keep only the strongest RSSI per grid
         for (log in cellLogs) {
             if (log.lat == null || log.lon == null || log.rssi == null) {
                 Log.d(TAG, "Skipping log with null data: lat=${log.lat}, lon=${log.lon}, rssi=${log.rssi}")
                 continue
             }
             
-            // Convert RSSI to intensity (stronger signal = higher intensity)
-            // RSSI typically ranges from -120 to -20 dBm
-            val normalizedIntensity = maxOf(0.1, minOf(1.0, (log.rssi + 120) / 100.0))
+            // Convert to approximate grid coordinates (simple lat/lon grid)
+            // 1 degree latitude ≈ 111km, so gridSize/111000 degrees per grid
+            val gridLat = floor(log.lat / (gridSize / 111000.0))
+            val gridLon = floor(log.lon / (gridSize / (111000.0 * kotlin.math.cos(Math.toRadians(log.lat)))))
+            val gridKey = "${gridLat}_${gridLon}"
             
-            Log.d(TAG, "Adding heatmap point: lat=${log.lat}, lon=${log.lon}, rssi=${log.rssi}, intensity=$normalizedIntensity")
+            // Keep only the strongest RSSI in each grid cell
+            val existingLog = gridMap[gridKey]
+            if (existingLog == null || log.rssi > existingLog.rssi!!) {
+                gridMap[gridKey] = log
+            }
+        }
+        
+        Log.d(TAG, "Grid bucketing: ${cellLogs.size} original points -> ${gridMap.size} grid representatives")
+        
+        // Step 2: Convert representative points to WeightedLatLng with RSSI-based weights
+        val heatmapData = mutableListOf<WeightedLatLng>()
+        val rssiSamples = mutableListOf<Pair<Int, Double>>()
+        
+        for ((gridKey, log) in gridMap) {
+            // RSSI to weight mapping: [-120, -20] -> [0.0, 1.0] with minimum 0.1
+            val rssiRange = -20.0 - (-120.0)  // 100.0
+            val normalizedWeight = (log.rssi!! - (-120.0)) / rssiRange
+            val clampedWeight = maxOf(0.1, minOf(1.0, normalizedWeight))
             
             heatmapData.add(
                 WeightedLatLng(
-                    LatLng(log.lat, log.lon),
-                    normalizedIntensity
+                    LatLng(log.lat!!, log.lon!!),
+                    clampedWeight
                 )
             )
+            
+            // Store samples for logging
+            if (rssiSamples.size < 5) {
+                rssiSamples.add(Pair(log.rssi, clampedWeight))
+            }
         }
         
-        Log.d(TAG, "Prepared ${heatmapData.size} heatmap points")
+        Log.d(TAG, "Heatmap data prepared: ${heatmapData.size} weighted points")
+        Log.d(TAG, "RSSI->Weight samples: ${rssiSamples.joinToString { "(${it.first}dBm -> ${String.format("%.2f", it.second)})" }}")
         
         if (heatmapData.isNotEmpty()) {
             try {
+                // Step 3: Create custom gradient (blue -> cyan -> green -> yellow -> red)
+                val colors = intArrayOf(
+                    Color.rgb(0, 0, 255),      // Blue (weak signal)
+                    Color.rgb(0, 255, 255),    // Cyan
+                    Color.rgb(0, 255, 0),      // Green
+                    Color.rgb(255, 255, 0),    // Yellow
+                    Color.rgb(255, 0, 0)       // Red (strong signal)
+                )
+                val startPoints = floatArrayOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f)
+                val gradient = Gradient(colors, startPoints)
+                
+                // Step 4: Configure HeatmapTileProvider with optimized parameters
                 val heatmapProvider = HeatmapTileProvider.Builder()
                     .weightedData(heatmapData)
-                    .radius(50) // Radius in pixels
-                    .maxIntensity(10.0) // Lower max intensity for better visibility
-                    .opacity(0.8) // Make it more visible
+                    .radius(35) // Reduced radius to prevent over-spreading
+                    .maxIntensity(1.0) // Match our weight range to prevent summing effects
+                    .opacity(0.75) // Balanced opacity
+                    .gradient(gradient) // Custom RSSI-based gradient
                     .build()
                 
                 heatmapTileOverlay = googleMap.addTileOverlay(
                     TileOverlayOptions()
                         .tileProvider(heatmapProvider)
-                        .zIndex(1000f) // High z-index to display above buildings and other overlays
+                        .zIndex(1000f) // High z-index to display above buildings
                 )
                 
-                Log.d(TAG, "Successfully created heatmap with ${heatmapData.size} points (z-index: 1000)")
-                Toast.makeText(this@MapsActivity, "Heatmap created with ${heatmapData.size} points", Toast.LENGTH_SHORT).show()
+                val strongestRssi = gridMap.values.maxOfOrNull { it.rssi!! } ?: -120
+                val weakestRssi = gridMap.values.minOfOrNull { it.rssi!! } ?: -120
+                
+                Log.d(TAG, "Successfully created RSSI-based heatmap:")
+                Log.d(TAG, "- Grid buckets: ${gridMap.size}")
+                Log.d(TAG, "- Heatmap points: ${heatmapData.size}")
+                Log.d(TAG, "- RSSI range: ${weakestRssi}dBm to ${strongestRssi}dBm")
+                Log.d(TAG, "- Gradient: Blue(-120dBm) -> Red(-20dBm)")
+                
+                Toast.makeText(this@MapsActivity, 
+                    "RSSI Heatmap: ${heatmapData.size} points (${weakestRssi} to ${strongestRssi} dBm)", 
+                    Toast.LENGTH_SHORT).show()
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error creating heatmap: ${e.message}", e)
+                Log.e(TAG, "Error creating RSSI-based heatmap: ${e.message}", e)
                 Toast.makeText(this@MapsActivity, "Error creating heatmap: ${e.message}", Toast.LENGTH_LONG).show()
             }
         } else {
-            Log.w(TAG, "No valid data points for heatmap")
-            Toast.makeText(this@MapsActivity, "No data available for heatmap", Toast.LENGTH_SHORT).show()
+            Log.w(TAG, "No valid data points for RSSI-based heatmap")
+            Toast.makeText(this@MapsActivity, "No valid data for heatmap", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun createRssiCircles(cellLogs: List<CellLog>) {
+        Log.d(TAG, "Creating RSSI circles with ${cellLogs.size} cell logs")
+        
+        // Use same grid-based approach as heatmap
+        val gridSize = 25.0 // meters
+        val gridMap = mutableMapOf<String, CellLog>()
+        
+        // Create grid buckets and keep only the strongest RSSI per grid
+        for (log in cellLogs) {
+            if (log.lat == null || log.lon == null || log.rssi == null) continue
+            
+            val gridLat = floor(log.lat / (gridSize / 111000.0))
+            val gridLon = floor(log.lon / (gridSize / (111000.0 * kotlin.math.cos(Math.toRadians(log.lat)))))
+            val gridKey = "${gridLat}_${gridLon}"
+            
+            val existingLog = gridMap[gridKey]
+            if (existingLog == null || log.rssi > existingLog.rssi!!) {
+                gridMap[gridKey] = log
+            }
+        }
+        
+        Log.d(TAG, "RSSI circles: ${cellLogs.size} original points -> ${gridMap.size} grid representatives")
+        
+        val rssiSamples = mutableListOf<Pair<Int, Int>>()
+        
+        for ((gridKey, log) in gridMap) {
+            // RSSI to color mapping
+            val rssiColor = rssiToColor(log.rssi!!)
+            
+            val circle = googleMap.addCircle(
+                CircleOptions()
+                    .center(LatLng(log.lat!!, log.lon!!))
+                    .radius(15.0) // Fixed radius in meters
+                    .fillColor(rssiColor)
+                    .strokeColor(Color.argb(200, 0, 0, 0)) // Black border
+                    .strokeWidth(1f)
+            )
+            
+            rssiCircles.add(circle)
+            
+            // Store samples for logging
+            if (rssiSamples.size < 5) {
+                rssiSamples.add(Pair(log.rssi, rssiColor))
+            }
+        }
+        
+        val strongestRssi = gridMap.values.maxOfOrNull { it.rssi!! } ?: -120
+        val weakestRssi = gridMap.values.minOfOrNull { it.rssi!! } ?: -120
+        
+        Log.d(TAG, "Successfully created ${rssiCircles.size} RSSI circles")
+        Log.d(TAG, "RSSI->Color samples: ${rssiSamples.joinToString { "(${it.first}dBm)" }}")
+        Log.d(TAG, "RSSI range: ${weakestRssi}dBm to ${strongestRssi}dBm")
+        
+        Toast.makeText(this@MapsActivity, 
+            "RSSI Circles: ${rssiCircles.size} points (${weakestRssi} to ${strongestRssi} dBm)", 
+            Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun rssiToColor(rssi: Int): Int {
+        // RSSI to color mapping: [-120, -20] -> Blue to Red
+        val rssiRange = -20.0 - (-120.0)  // 100.0
+        val normalizedRssi = maxOf(0.0, minOf(1.0, (rssi - (-120.0)) / rssiRange))
+        
+        return when {
+            normalizedRssi <= 0.25 -> {
+                // Blue to Cyan
+                val factor = normalizedRssi / 0.25
+                Color.argb(150, 
+                    0, 
+                    (factor * 255).toInt(), 
+                    255)
+            }
+            normalizedRssi <= 0.5 -> {
+                // Cyan to Green
+                val factor = (normalizedRssi - 0.25) / 0.25
+                Color.argb(150, 
+                    0, 
+                    255, 
+                    (255 * (1 - factor)).toInt())
+            }
+            normalizedRssi <= 0.75 -> {
+                // Green to Yellow
+                val factor = (normalizedRssi - 0.5) / 0.25
+                Color.argb(150, 
+                    (factor * 255).toInt(), 
+                    255, 
+                    0)
+            }
+            else -> {
+                // Yellow to Red
+                val factor = (normalizedRssi - 0.75) / 0.25
+                Color.argb(150, 
+                    255, 
+                    (255 * (1 - factor)).toInt(), 
+                    0)
+            }
         }
     }
 
@@ -401,6 +560,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Clear heatmap
         heatmapTileOverlay?.remove()
         heatmapTileOverlay = null
+        
+        // Clear RSSI circles
+        rssiCircles.forEach { it.remove() }
+        rssiCircles.clear()
         
         // Clear debug circles
         debugCircles.forEach { it.remove() }
