@@ -9,6 +9,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -16,6 +17,8 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.maps.android.heatmaps.HeatmapTileProvider
+import com.google.maps.android.heatmaps.WeightedLatLng
 import java.util.concurrent.Executors
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -33,11 +36,27 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val handler = Handler(Looper.getMainLooper())
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
     
+    // UI Components
+    private lateinit var cellIdSpinner: Spinner
+    private lateinit var displayModeSpinner: Spinner
+    private lateinit var refreshButton: Button
+    
+    // Map elements
     private val cellMarkers = mutableListOf<Marker>()
     private val baseStationMarkers = mutableListOf<Marker>()
     private val debugCircles = mutableListOf<Circle>()
+    private var heatmapTileOverlay: TileOverlay? = null
     
-    private var showDebugCircles = false
+    // Data and state
+    private var allCellLogs = listOf<CellLog>()
+    private var allCellIds = listOf<String>()
+    private var currentDisplayMode = DisplayMode.HEATMAP
+    private var selectedCellId: String? = null
+    
+    enum class DisplayMode(val displayName: String) {
+        HEATMAP("Heatmap"),
+        PINS("Pins")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,13 +67,50 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Initialize database
         cellDatabase = CellDatabase(this)
         
+        // Initialize UI components
+        initializeUI()
+        
         // Set up the map fragment
         val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
         
         // Set up action bar
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = "Cell Tower Map"
+        supportActionBar?.title = "Cell Tower Heatmap"
+    }
+
+    private fun initializeUI() {
+        cellIdSpinner = findViewById(R.id.cellIdSpinner)
+        displayModeSpinner = findViewById(R.id.displayModeSpinner)
+        refreshButton = findViewById(R.id.refreshButton)
+        
+        // Setup display mode spinner
+        val displayModes = DisplayMode.values().map { it.displayName }
+        val displayModeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, displayModes)
+        displayModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        displayModeSpinner.adapter = displayModeAdapter
+        
+        displayModeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                currentDisplayMode = DisplayMode.values()[position]
+                updateMapVisualization()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        
+        // Setup cell ID spinner listener
+        cellIdSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                selectedCellId = if (position == 0) null else allCellIds[position - 1]
+                updateMapVisualization()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        
+        // Setup refresh button
+        refreshButton.setOnClickListener {
+            updateMapData()
+        }
     }
 
     override fun onMapReady(map: GoogleMap) {
@@ -97,8 +153,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         backgroundExecutor.execute {
             try {
                 // Get recent cell logs
-                val recentLogs = cellDatabase.getRecentCellLogs(60) // Last 60 minutes
+                allCellLogs = cellDatabase.getRecentCellLogs(60) // Last 60 minutes
                 val cellLogsMap = cellDatabase.getCellLogsGroupedByCell(60)
+                
+                // Get unique cell IDs
+                allCellIds = allCellLogs.mapNotNull { it.cellId }.distinct().sorted()
                 
                 // Estimate base station positions
                 val estimatedPositions = BaseStationEstimator.estimateBaseStationPositions(
@@ -110,11 +169,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     useIntersectionMethod = true
                 )
                 
-                Log.d(TAG, "Found ${recentLogs.size} recent logs and ${estimatedPositions.size} estimated positions")
+                Log.d(TAG, "Found ${allCellLogs.size} recent logs, ${allCellIds.size} cell IDs, and ${estimatedPositions.size} estimated positions")
                 
                 // Update UI on main thread
                 handler.post {
-                    updateMapMarkers(recentLogs, estimatedPositions, cellLogsMap)
+                    updateCellIdSpinner()
+                    updateMapVisualization()
+                    updateBaseStationMarkers(estimatedPositions)
                 }
                 
             } catch (e: Exception) {
@@ -123,45 +184,75 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun updateMapMarkers(
-        cellLogs: List<CellLog>,
-        estimatedPositions: List<EstimatedBaseStation>,
-        cellLogsMap: Map<String, List<CellLog>>
-    ) {
-        Log.d(TAG, "Updating map markers")
+    private fun updateCellIdSpinner() {
+        val items = mutableListOf("All Cell IDs")
+        items.addAll(allCellIds)
         
-        // Clear existing markers and circles
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        cellIdSpinner.adapter = adapter
+    }
+
+    private fun updateMapVisualization() {
+        if (!::googleMap.isInitialized) return
+        
+        Log.d(TAG, "Updating map visualization - Mode: $currentDisplayMode, Filter: $selectedCellId")
+        
+        // Clear existing visualizations
         clearMapElements()
         
-        // Add cell tower observation markers (blue)
-        addCellObservationMarkers(cellLogs)
-        
-        // Add estimated base station markers (red)
-        addBaseStationMarkers(estimatedPositions)
-        
-        // Add debug circles if enabled
-        if (showDebugCircles) {
-            addDebugCircles(cellLogsMap)
+        // Filter data based on selected cell ID
+        val filteredLogs = if (selectedCellId != null) {
+            allCellLogs.filter { it.cellId == selectedCellId }
+        } else {
+            allCellLogs
         }
         
-        // Auto-fit camera to show all markers if we have data
-        if (cellMarkers.isNotEmpty() || baseStationMarkers.isNotEmpty()) {
-            fitCameraToMarkers()
+        when (currentDisplayMode) {
+            DisplayMode.HEATMAP -> createHeatmap(filteredLogs)
+            DisplayMode.PINS -> createPinMarkers(filteredLogs)
+        }
+        
+        // Auto-fit camera if we have data
+        if (filteredLogs.isNotEmpty()) {
+            fitCameraToData(filteredLogs)
         }
     }
 
-    private fun clearMapElements() {
-        cellMarkers.forEach { it.remove() }
-        cellMarkers.clear()
+    private fun createHeatmap(cellLogs: List<CellLog>) {
+        val heatmapData = mutableListOf<WeightedLatLng>()
         
-        baseStationMarkers.forEach { it.remove() }
-        baseStationMarkers.clear()
+        for (log in cellLogs) {
+            if (log.lat == null || log.lon == null || log.rssi == null) continue
+            
+            // Convert RSSI to intensity (stronger signal = higher intensity)
+            // RSSI typically ranges from -120 to -20 dBm
+            val normalizedIntensity = maxOf(0.1, minOf(1.0, (log.rssi + 120) / 100.0))
+            
+            heatmapData.add(
+                WeightedLatLng(
+                    LatLng(log.lat, log.lon),
+                    normalizedIntensity
+                )
+            )
+        }
         
-        debugCircles.forEach { it.remove() }
-        debugCircles.clear()
+        if (heatmapData.isNotEmpty()) {
+            val heatmapProvider = HeatmapTileProvider.Builder()
+                .weightedData(heatmapData)
+                .radius(50) // Radius in pixels
+                .maxIntensity(1000.0)
+                .build()
+            
+            heatmapTileOverlay = googleMap.addTileOverlay(
+                TileOverlayOptions().tileProvider(heatmapProvider)
+            )
+            
+            Log.d(TAG, "Created heatmap with ${heatmapData.size} points")
+        }
     }
 
-    private fun addCellObservationMarkers(cellLogs: List<CellLog>) {
+    private fun createPinMarkers(cellLogs: List<CellLog>) {
         for (log in cellLogs) {
             if (log.lat == null || log.lon == null) continue
             
@@ -175,12 +266,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             
             marker?.let { cellMarkers.add(it) }
         }
-        Log.d(TAG, "Added ${cellMarkers.size} cell observation markers")
+        Log.d(TAG, "Created ${cellMarkers.size} pin markers")
     }
 
-    private fun addBaseStationMarkers(estimatedPositions: List<EstimatedBaseStation>) {
+    private fun updateBaseStationMarkers(estimatedPositions: List<EstimatedBaseStation>) {
+        // Clear existing base station markers
+        baseStationMarkers.forEach { it.remove() }
+        baseStationMarkers.clear()
+        
         for (baseStation in estimatedPositions) {
             if (baseStation.lat == null || baseStation.lon == null) continue
+            
+            // Only show base stations for the selected cell ID if filtering is active
+            if (selectedCellId != null && baseStation.cellId != selectedCellId) continue
             
             val marker = googleMap.addMarker(
                 MarkerOptions()
@@ -192,46 +290,34 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             
             marker?.let { baseStationMarkers.add(it) }
         }
-        Log.d(TAG, "Added ${baseStationMarkers.size} base station markers")
+        Log.d(TAG, "Updated ${baseStationMarkers.size} base station markers")
     }
 
-    private fun addDebugCircles(cellLogsMap: Map<String, List<CellLog>>) {
-        Log.d(TAG, "Adding debug circles")
+    private fun clearMapElements() {
+        // Clear pin markers
+        cellMarkers.forEach { it.remove() }
+        cellMarkers.clear()
         
-        for ((_, logs) in cellLogsMap) {
-            for (log in logs) {
-                if (log.lat == null || log.lon == null || log.rssi == null) continue
-                
-                // Calculate distance from RSSI (same formula as in BaseStationEstimator)
-                val rssiDbm = maxOf(minOf(log.rssi.toDouble(), -20.0), -140.0)
-                val refRssiDbm = -40.0
-                val refDistM = 1.0
-                val pathLossExponent = 2.0
-                val n = maxOf(pathLossExponent, 0.1)
-                val distanceM = refDistM * Math.pow(10.0, (refRssiDbm - rssiDbm) / (10.0 * n))
-                val clippedDistance = maxOf(1.0, minOf(distanceM, 50_000.0))
-                
-                val circle = googleMap.addCircle(
-                    CircleOptions()
-                        .center(LatLng(log.lat, log.lon))
-                        .radius(clippedDistance)
-                        .strokeColor(Color.argb(100, 128, 128, 128))
-                        .strokeWidth(1f)
-                        .fillColor(Color.TRANSPARENT)
-                )
-                
-                debugCircles.add(circle)
-            }
-        }
-        Log.d(TAG, "Added ${debugCircles.size} debug circles")
+        // Clear heatmap
+        heatmapTileOverlay?.remove()
+        heatmapTileOverlay = null
+        
+        // Clear debug circles
+        debugCircles.forEach { it.remove() }
+        debugCircles.clear()
     }
 
-    private fun fitCameraToMarkers() {
-        val allMarkers = cellMarkers + baseStationMarkers
-        if (allMarkers.isEmpty()) return
+    private fun fitCameraToData(cellLogs: List<CellLog>) {
+        val validLogs = cellLogs.filter { it.lat != null && it.lon != null }
+        if (validLogs.isEmpty()) return
         
         val builder = LatLngBounds.Builder()
-        for (marker in allMarkers) {
+        for (log in validLogs) {
+            builder.include(LatLng(log.lat!!, log.lon!!))
+        }
+        
+        // Also include base station markers
+        for (marker in baseStationMarkers) {
             builder.include(marker.position)
         }
         
@@ -239,15 +325,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             val bounds = builder.build()
             val padding = 100 // pixels
             googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
-            Log.d(TAG, "Camera fitted to ${allMarkers.size} markers")
+            Log.d(TAG, "Camera fitted to ${validLogs.size} data points")
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fit camera to markers: ${e.message}")
+            Log.w(TAG, "Failed to fit camera to data: ${e.message}")
         }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menu?.add(0, 1, 0, "Toggle Debug Circles")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 2, 0, "Refresh Data")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -258,14 +343,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 true
             }
             1 -> {
-                showDebugCircles = !showDebugCircles
-                updateMapData()
-                Log.d(TAG, "Debug circles toggled: $showDebugCircles")
-                true
-            }
-            2 -> {
-                updateMapData()
-                Log.d(TAG, "Manual data refresh triggered")
+                // Debug circles functionality can be implemented if needed
+                Log.d(TAG, "Debug circles toggle requested")
                 true
             }
             else -> super.onOptionsItemSelected(item)
