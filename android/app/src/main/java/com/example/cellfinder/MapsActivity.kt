@@ -309,22 +309,39 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun createHeatmap(cellLogs: List<CellLog>) {
         Log.d(TAG, "Creating RSSI-based heatmap with ${cellLogs.size} cell logs")
         
+        // First, analyze the RSSI range for debugging
+        val rssiValues = cellLogs.mapNotNull { it.rssi }
+        if (rssiValues.isEmpty()) {
+            Log.w(TAG, "No valid RSSI values found")
+            Toast.makeText(this@MapsActivity, "No valid RSSI data for heatmap", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val minRssi = rssiValues.minOrNull() ?: -120
+        val maxRssi = rssiValues.maxOrNull() ?: -20
+        Log.d(TAG, "RSSI range in data: ${minRssi}dBm to ${maxRssi}dBm")
+        
         // Step 1: Grid-based bucketing to suppress density effects
-        val gridSize = 25.0 // meters
+        val gridSizeMeters = 25.0
         val gridMap = mutableMapOf<String, CellLog>()
         
-        // Create grid buckets and keep only the strongest RSSI per grid
+        // Create proper geographic grid buckets
         for (log in cellLogs) {
             if (log.lat == null || log.lon == null || log.rssi == null) {
                 Log.d(TAG, "Skipping log with null data: lat=${log.lat}, lon=${log.lon}, rssi=${log.rssi}")
                 continue
             }
             
-            // Convert to approximate grid coordinates (simple lat/lon grid)
-            // 1 degree latitude ≈ 111km, so gridSize/111000 degrees per grid
-            val gridLat = floor(log.lat / (gridSize / 111000.0))
-            val gridLon = floor(log.lon / (gridSize / (111000.0 * kotlin.math.cos(Math.toRadians(log.lat)))))
-            val gridKey = "${gridLat}_${gridLon}"
+            // Proper geographic grid calculation
+            // 1 degree latitude ≈ 111,320 meters
+            // 1 degree longitude ≈ 111,320 * cos(latitude) meters
+            val latDegreesPerGrid = gridSizeMeters / 111320.0
+            val lonDegreesPerGrid = gridSizeMeters / (111320.0 * kotlin.math.cos(kotlin.math.toRadians(log.lat)))
+            
+            // Calculate grid indices (floor to create proper grid cells)
+            val gridLatIndex = kotlin.math.floor(log.lat / latDegreesPerGrid).toInt()
+            val gridLonIndex = kotlin.math.floor(log.lon / lonDegreesPerGrid).toInt()
+            val gridKey = "${gridLatIndex}_${gridLonIndex}"
             
             // Keep only the strongest RSSI in each grid cell
             val existingLog = gridMap[gridKey]
@@ -341,8 +358,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         for ((gridKey, log) in gridMap) {
             // RSSI to weight mapping: [-120, -20] -> [0.0, 1.0] with minimum 0.1
-            val rssiRange = -20.0 - (-120.0)  // 100.0
-            val normalizedWeight = (log.rssi!! - (-120.0)) / rssiRange
+            val rssiMin = -120.0
+            val rssiMax = -20.0
+            val rssiRange = rssiMax - rssiMin  // 100.0
+            val normalizedWeight = (log.rssi!! - rssiMin) / rssiRange
             val clampedWeight = maxOf(0.1, minOf(1.0, normalizedWeight))
             
             heatmapData.add(
@@ -389,17 +408,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         .zIndex(1000f) // High z-index to display above buildings
                 )
                 
-                val strongestRssi = gridMap.values.maxOfOrNull { it.rssi!! } ?: -120
-                val weakestRssi = gridMap.values.minOfOrNull { it.rssi!! } ?: -120
-                
                 Log.d(TAG, "Successfully created RSSI-based heatmap:")
                 Log.d(TAG, "- Grid buckets: ${gridMap.size}")
                 Log.d(TAG, "- Heatmap points: ${heatmapData.size}")
-                Log.d(TAG, "- RSSI range: ${weakestRssi}dBm to ${strongestRssi}dBm")
+                Log.d(TAG, "- Data RSSI range: ${minRssi}dBm to ${maxRssi}dBm")
+                Log.d(TAG, "- Mapping range: -120dBm to -20dBm")
                 Log.d(TAG, "- Gradient: Blue(-120dBm) -> Red(-20dBm)")
                 
                 Toast.makeText(this@MapsActivity, 
-                    "RSSI Heatmap: ${heatmapData.size} points (${weakestRssi} to ${strongestRssi} dBm)", 
+                    "RSSI Heatmap: ${heatmapData.size} points (${minRssi} to ${maxRssi} dBm)", 
                     Toast.LENGTH_SHORT).show()
                 
             } catch (e: Exception) {
@@ -416,16 +433,20 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         Log.d(TAG, "Creating RSSI circles with ${cellLogs.size} cell logs")
         
         // Use same grid-based approach as heatmap
-        val gridSize = 25.0 // meters
+        val gridSizeMeters = 25.0
         val gridMap = mutableMapOf<String, CellLog>()
         
         // Create grid buckets and keep only the strongest RSSI per grid
         for (log in cellLogs) {
             if (log.lat == null || log.lon == null || log.rssi == null) continue
             
-            val gridLat = floor(log.lat / (gridSize / 111000.0))
-            val gridLon = floor(log.lon / (gridSize / (111000.0 * kotlin.math.cos(Math.toRadians(log.lat)))))
-            val gridKey = "${gridLat}_${gridLon}"
+            // Same corrected grid calculation as heatmap
+            val latDegreesPerGrid = gridSizeMeters / 111320.0
+            val lonDegreesPerGrid = gridSizeMeters / (111320.0 * kotlin.math.cos(kotlin.math.toRadians(log.lat)))
+            
+            val gridLatIndex = kotlin.math.floor(log.lat / latDegreesPerGrid).toInt()
+            val gridLonIndex = kotlin.math.floor(log.lon / lonDegreesPerGrid).toInt()
+            val gridKey = "${gridLatIndex}_${gridLonIndex}"
             
             val existingLog = gridMap[gridKey]
             if (existingLog == null || log.rssi > existingLog.rssi!!) {
@@ -553,21 +574,29 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun clearMapElements() {
+        Log.d(TAG, "Clearing map elements...")
+        
         // Clear pin markers
+        val pinCount = cellMarkers.size
         cellMarkers.forEach { it.remove() }
         cellMarkers.clear()
         
-        // Clear heatmap
+        // Clear heatmap overlay
+        val hadHeatmap = heatmapTileOverlay != null
         heatmapTileOverlay?.remove()
         heatmapTileOverlay = null
         
         // Clear RSSI circles
+        val circleCount = rssiCircles.size
         rssiCircles.forEach { it.remove() }
         rssiCircles.clear()
         
         // Clear debug circles
+        val debugCount = debugCircles.size
         debugCircles.forEach { it.remove() }
         debugCircles.clear()
+        
+        Log.d(TAG, "Cleared: $pinCount pins, heatmap: $hadHeatmap, $circleCount RSSI circles, $debugCount debug circles")
     }
 
     private fun fitCameraToData(cellLogs: List<CellLog>) {
