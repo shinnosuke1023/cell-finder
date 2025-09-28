@@ -121,6 +121,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         googleMap.uiSettings.isZoomControlsEnabled = true
         googleMap.uiSettings.isMyLocationButtonEnabled = true
         
+        // Disable buildings layer for better heatmap visibility
+        googleMap.isBuildingsEnabled = false
+        
         // Enable location if permitted
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == 
             PackageManager.PERMISSION_GRANTED) {
@@ -282,10 +285,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     .build()
                 
                 heatmapTileOverlay = googleMap.addTileOverlay(
-                    TileOverlayOptions().tileProvider(heatmapProvider)
+                    TileOverlayOptions()
+                        .tileProvider(heatmapProvider)
+                        .zIndex(1000f) // High z-index to display above buildings and other overlays
                 )
                 
-                Log.d(TAG, "Successfully created heatmap with ${heatmapData.size} points")
+                Log.d(TAG, "Successfully created heatmap with ${heatmapData.size} points (z-index: 1000)")
                 Toast.makeText(this@MapsActivity, "Heatmap created with ${heatmapData.size} points", Toast.LENGTH_SHORT).show()
                 
             } catch (e: Exception) {
@@ -380,6 +385,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menu?.add(0, 1, 0, "Toggle Debug Circles")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         menu?.add(0, 2, 0, "Add Sample Data")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 3, 0, "Toggle Buildings")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -397,6 +403,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             2 -> {
                 // Add sample data for testing
                 addSampleData()
+                true
+            }
+            3 -> {
+                // Toggle buildings visibility
+                googleMap.isBuildingsEnabled = !googleMap.isBuildingsEnabled
+                val status = if (googleMap.isBuildingsEnabled) "enabled" else "disabled"
+                Toast.makeText(this, "Buildings $status", Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "Buildings layer $status")
                 true
             }
             else -> super.onOptionsItemSelected(item)
