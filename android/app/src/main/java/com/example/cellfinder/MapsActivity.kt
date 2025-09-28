@@ -102,8 +102,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Setup cell ID spinner listener
         cellIdSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                // This will be overridden when updateCellIdSpinner is called
-                // The actual logic is in updateCellIdSpinner()
+                val selectedItem = parent?.getItemAtPosition(position)?.toString() ?: ""
+                
+                selectedCellId = if (position == 0 || selectedItem.startsWith("All Cell IDs")) {
+                    null
+                } else {
+                    selectedItem
+                }
+                
+                Log.d(TAG, "Cell ID filter changed to: $selectedCellId")
+                updateMapVisualization()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -202,57 +210,49 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun updateCellIdSpinner() {
-        val items = mutableListOf("All Cell IDs (${allCellIds.size} total)")
+        Log.d(TAG, "updateCellIdSpinner called with ${allCellIds.size} cell IDs")
         
-        // Limit the number of displayed cell IDs if there are too many
-        val maxDisplayItems = 50
-        val cellIdsToShow = if (allCellIds.size > maxDisplayItems) {
-            // Show first 25, then a separator, then last 25
-            val firstHalf = allCellIds.take(25)
-            val lastHalf = allCellIds.takeLast(25)
-            val separator = "... (${allCellIds.size - 50} more) ..."
+        val items = mutableListOf("All Cell IDs")
+        
+        // Add count to the first item
+        if (allCellIds.isNotEmpty()) {
+            items[0] = "All Cell IDs (${allCellIds.size} total)"
+        }
+        
+        // Simply add all cell IDs for now - we'll handle performance differently
+        items.addAll(allCellIds)
+        
+        Log.d(TAG, "Spinner items: ${items.take(5)}${if (items.size > 5) "... (${items.size} total)" else ""}")
+        
+        try {
+            // Create adapter with standard layouts
+            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items)
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             
-            items.addAll(firstHalf)
-            items.add(separator)
-            items.addAll(lastHalf)
-        } else {
-            items.addAll(allCellIds)
-        }
-        
-        // Create custom adapter for better handling of many items
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        cellIdSpinner.adapter = adapter
-        
-        // Handle selection of separator item
-        cellIdSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                val selectedItem = items[position]
-                
-                // If separator is selected, keep previous selection
-                if (selectedItem.contains("... (") && selectedItem.contains("more) ...")) {
-                    // Don't change selection for separator
-                    return
-                }
-                
-                selectedCellId = if (position == 0 || selectedItem.startsWith("All Cell IDs")) {
-                    null
-                } else {
-                    selectedItem
-                }
-                updateMapVisualization()
+            // Store current selection to preserve it
+            val currentSelection = cellIdSpinner.selectedItemPosition
+            
+            // Update adapter
+            cellIdSpinner.adapter = adapter
+            
+            // Restore selection if valid
+            if (currentSelection < items.size && currentSelection >= 0) {
+                cellIdSpinner.setSelection(currentSelection)
+                Log.d(TAG, "Restored spinner selection to position $currentSelection")
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            
+            Log.d(TAG, "Successfully updated cell ID spinner with ${items.size} items")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating cell ID spinner: ${e.message}", e)
+            Toast.makeText(this, "Error updating cell ID filter: ${e.message}", Toast.LENGTH_LONG).show()
         }
-        
-        // Log the number of cell IDs for debugging
-        Log.d(TAG, "Updated cell ID spinner with ${allCellIds.size} cell IDs")
         
         // If there are many cell IDs, show a toast to inform user
-        if (allCellIds.size > maxDisplayItems) {
+        if (allCellIds.size > 50) {
             handler.post {
                 Toast.makeText(this@MapsActivity, 
-                    "Found ${allCellIds.size} cell IDs. Showing first and last 25 for performance.", 
+                    "Found ${allCellIds.size} cell IDs. Dropdown may be long to scroll.", 
                     Toast.LENGTH_LONG).show()
             }
         }
@@ -546,10 +546,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         backgroundExecutor.execute {
             try {
-                cellDatabase.clearAllLogs()
+                val deletedCount = cellDatabase.clearAllLogs()
                 
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "All logs cleared successfully", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapsActivity, "Cleared $deletedCount log records successfully", Toast.LENGTH_SHORT).show()
                     
                     // Reset data and refresh map
                     allCellLogs = emptyList()
@@ -557,7 +557,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     updateCellIdSpinner()
                     updateMapVisualization()
                     
-                    Log.d(TAG, "All logs cleared and map refreshed")
+                    Log.d(TAG, "All logs cleared ($deletedCount records) and map refreshed")
                 }
                 
             } catch (e: Exception) {
