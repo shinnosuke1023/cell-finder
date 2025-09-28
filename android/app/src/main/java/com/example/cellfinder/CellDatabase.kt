@@ -148,4 +148,10 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         val deletedRows = db.delete(TABLE_LOGS, "$COLUMN_TIMESTAMP < ?", arrayOf(cutoffTime.toString()))
         Log.d(TAG, "Cleared $deletedRows old records")
     }
+    
+    fun clearAllLogs() {
+        val db = writableDatabase
+        val deletedRows = db.delete(TABLE_LOGS, null, null)
+        Log.d(TAG, "Cleared all $deletedRows log records")
+    }
 }

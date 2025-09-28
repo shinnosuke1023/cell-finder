@@ -10,6 +10,7 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -101,8 +102,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Setup cell ID spinner listener
         cellIdSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                selectedCellId = if (position == 0) null else allCellIds[position - 1]
-                updateMapVisualization()
+                // This will be overridden when updateCellIdSpinner is called
+                // The actual logic is in updateCellIdSpinner()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -201,12 +202,60 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun updateCellIdSpinner() {
-        val items = mutableListOf("All Cell IDs")
-        items.addAll(allCellIds)
+        val items = mutableListOf("All Cell IDs (${allCellIds.size} total)")
         
+        // Limit the number of displayed cell IDs if there are too many
+        val maxDisplayItems = 50
+        val cellIdsToShow = if (allCellIds.size > maxDisplayItems) {
+            // Show first 25, then a separator, then last 25
+            val firstHalf = allCellIds.take(25)
+            val lastHalf = allCellIds.takeLast(25)
+            val separator = "... (${allCellIds.size - 50} more) ..."
+            
+            items.addAll(firstHalf)
+            items.add(separator)
+            items.addAll(lastHalf)
+        } else {
+            items.addAll(allCellIds)
+        }
+        
+        // Create custom adapter for better handling of many items
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         cellIdSpinner.adapter = adapter
+        
+        // Handle selection of separator item
+        cellIdSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                val selectedItem = items[position]
+                
+                // If separator is selected, keep previous selection
+                if (selectedItem.contains("... (") && selectedItem.contains("more) ...")) {
+                    // Don't change selection for separator
+                    return
+                }
+                
+                selectedCellId = if (position == 0 || selectedItem.startsWith("All Cell IDs")) {
+                    null
+                } else {
+                    selectedItem
+                }
+                updateMapVisualization()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        
+        // Log the number of cell IDs for debugging
+        Log.d(TAG, "Updated cell ID spinner with ${allCellIds.size} cell IDs")
+        
+        // If there are many cell IDs, show a toast to inform user
+        if (allCellIds.size > maxDisplayItems) {
+            handler.post {
+                Toast.makeText(this@MapsActivity, 
+                    "Found ${allCellIds.size} cell IDs. Showing first and last 25 for performance.", 
+                    Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun updateMapVisualization() {
@@ -386,6 +435,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         menu?.add(0, 1, 0, "Toggle Debug Circles")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         menu?.add(0, 2, 0, "Add Sample Data")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         menu?.add(0, 3, 0, "Toggle Buildings")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 4, 0, "Clear All Logs")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -411,6 +461,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 val status = if (googleMap.isBuildingsEnabled) "enabled" else "disabled"
                 Toast.makeText(this, "Buildings $status", Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "Buildings layer $status")
+                true
+            }
+            4 -> {
+                // Clear all logs with confirmation
+                clearAllLogsWithConfirmation()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -470,6 +525,45 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.e(TAG, "Error adding sample data: ${e.message}", e)
                 handler.post {
                     Toast.makeText(this@MapsActivity, "Error adding sample data: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun clearAllLogsWithConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle("Clear All Logs")
+            .setMessage("Are you sure you want to delete all cell tower logs? This action cannot be undone.")
+            .setPositiveButton("Clear All") { _, _ ->
+                clearAllLogs()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun clearAllLogs() {
+        Log.d(TAG, "Clearing all logs...")
+        
+        backgroundExecutor.execute {
+            try {
+                cellDatabase.clearAllLogs()
+                
+                handler.post {
+                    Toast.makeText(this@MapsActivity, "All logs cleared successfully", Toast.LENGTH_SHORT).show()
+                    
+                    // Reset data and refresh map
+                    allCellLogs = emptyList()
+                    allCellIds = emptyList()
+                    updateCellIdSpinner()
+                    updateMapVisualization()
+                    
+                    Log.d(TAG, "All logs cleared and map refreshed")
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error clearing logs: ${e.message}", e)
+                handler.post {
+                    Toast.makeText(this@MapsActivity, "Error clearing logs: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }

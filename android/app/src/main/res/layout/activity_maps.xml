@@ -7,38 +7,47 @@
     tools:context=".MapsActivity">
 
     <!-- Control Panel -->
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp"
-        android:background="@android:color/white"
-        android:elevation="4dp">
-
-        <Spinner
-            android:id="@+id/cellIdSpinner"
-            android:layout_width="0dp"
+        android:fillViewport="true">
+        
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp" />
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:background="@android:color/white"
+            android:elevation="4dp">
 
-        <Spinner
-            android:id="@+id/displayModeSpinner"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp" />
+            <Spinner
+                android:id="@+id/cellIdSpinner"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:spinnerMode="dropdown" />
 
-        <Button
-            android:id="@+id/refreshButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Refresh"
-            android:textSize="12sp"
-            android:minWidth="0dp"
-            android:paddingHorizontal="12dp" />
+            <Spinner
+                android:id="@+id/displayModeSpinner"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:spinnerMode="dropdown" />
 
-    </LinearLayout>
+            <Button
+                android:id="@+id/refreshButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="Refresh"
+                android:textSize="12sp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="12dp" />
+
+        </LinearLayout>
+        
+    </ScrollView>
 
     <!-- Map Fragment -->
     <fragment
