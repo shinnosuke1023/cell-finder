@@ -159,6 +159,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 // Get unique cell IDs
                 allCellIds = allCellLogs.mapNotNull { it.cellId }.distinct().sorted()
                 
+                // Enhanced logging for debugging
+                Log.d(TAG, "Database query results:")
+                Log.d(TAG, "- Total cell logs: ${allCellLogs.size}")
+                Log.d(TAG, "- Unique cell IDs: ${allCellIds.size} (${allCellIds.joinToString(", ")})")
+                
+                // Log sample data for debugging
+                allCellLogs.take(3).forEachIndexed { index, log ->
+                    Log.d(TAG, "Sample log $index: lat=${log.lat}, lon=${log.lon}, rssi=${log.rssi}, cellId=${log.cellId}")
+                }
+                
                 // Estimate base station positions
                 val estimatedPositions = BaseStationEstimator.estimateBaseStationPositions(
                     cellLogsMap,
@@ -180,6 +190,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating map data: ${e.message}", e)
+                handler.post {
+                    Toast.makeText(this@MapsActivity, "Error loading map data: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -194,7 +207,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun updateMapVisualization() {
-        if (!::googleMap.isInitialized) return
+        if (!::googleMap.isInitialized) {
+            Log.w(TAG, "GoogleMap not initialized yet")
+            return
+        }
         
         Log.d(TAG, "Updating map visualization - Mode: $currentDisplayMode, Filter: $selectedCellId")
         
@@ -208,26 +224,43 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             allCellLogs
         }
         
+        Log.d(TAG, "Filtered logs: ${filteredLogs.size} from ${allCellLogs.size} total logs")
+        
         when (currentDisplayMode) {
-            DisplayMode.HEATMAP -> createHeatmap(filteredLogs)
-            DisplayMode.PINS -> createPinMarkers(filteredLogs)
+            DisplayMode.HEATMAP -> {
+                Log.d(TAG, "Creating heatmap visualization")
+                createHeatmap(filteredLogs)
+            }
+            DisplayMode.PINS -> {
+                Log.d(TAG, "Creating pin visualization")
+                createPinMarkers(filteredLogs)
+            }
         }
         
         // Auto-fit camera if we have data
         if (filteredLogs.isNotEmpty()) {
             fitCameraToData(filteredLogs)
+        } else {
+            Log.w(TAG, "No data to display on map")
+            Toast.makeText(this@MapsActivity, "No data available to display", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun createHeatmap(cellLogs: List<CellLog>) {
+        Log.d(TAG, "Creating heatmap with ${cellLogs.size} cell logs")
         val heatmapData = mutableListOf<WeightedLatLng>()
         
         for (log in cellLogs) {
-            if (log.lat == null || log.lon == null || log.rssi == null) continue
+            if (log.lat == null || log.lon == null || log.rssi == null) {
+                Log.d(TAG, "Skipping log with null data: lat=${log.lat}, lon=${log.lon}, rssi=${log.rssi}")
+                continue
+            }
             
             // Convert RSSI to intensity (stronger signal = higher intensity)
             // RSSI typically ranges from -120 to -20 dBm
             val normalizedIntensity = maxOf(0.1, minOf(1.0, (log.rssi + 120) / 100.0))
+            
+            Log.d(TAG, "Adding heatmap point: lat=${log.lat}, lon=${log.lon}, rssi=${log.rssi}, intensity=$normalizedIntensity")
             
             heatmapData.add(
                 WeightedLatLng(
@@ -237,18 +270,31 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             )
         }
         
+        Log.d(TAG, "Prepared ${heatmapData.size} heatmap points")
+        
         if (heatmapData.isNotEmpty()) {
-            val heatmapProvider = HeatmapTileProvider.Builder()
-                .weightedData(heatmapData)
-                .radius(50) // Radius in pixels
-                .maxIntensity(1000.0)
-                .build()
-            
-            heatmapTileOverlay = googleMap.addTileOverlay(
-                TileOverlayOptions().tileProvider(heatmapProvider)
-            )
-            
-            Log.d(TAG, "Created heatmap with ${heatmapData.size} points")
+            try {
+                val heatmapProvider = HeatmapTileProvider.Builder()
+                    .weightedData(heatmapData)
+                    .radius(50) // Radius in pixels
+                    .maxIntensity(10.0) // Lower max intensity for better visibility
+                    .opacity(0.8) // Make it more visible
+                    .build()
+                
+                heatmapTileOverlay = googleMap.addTileOverlay(
+                    TileOverlayOptions().tileProvider(heatmapProvider)
+                )
+                
+                Log.d(TAG, "Successfully created heatmap with ${heatmapData.size} points")
+                Toast.makeText(this@MapsActivity, "Heatmap created with ${heatmapData.size} points", Toast.LENGTH_SHORT).show()
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating heatmap: ${e.message}", e)
+                Toast.makeText(this@MapsActivity, "Error creating heatmap: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        } else {
+            Log.w(TAG, "No valid data points for heatmap")
+            Toast.makeText(this@MapsActivity, "No data available for heatmap", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -333,6 +379,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menu?.add(0, 1, 0, "Toggle Debug Circles")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 2, 0, "Add Sample Data")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -347,7 +394,70 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.d(TAG, "Debug circles toggle requested")
                 true
             }
+            2 -> {
+                // Add sample data for testing
+                addSampleData()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun addSampleData() {
+        Log.d(TAG, "Adding sample data for testing")
+        
+        backgroundExecutor.execute {
+            try {
+                val currentTime = System.currentTimeMillis()
+                val sampleData = listOf(
+                    CellLog(
+                        timestamp = currentTime,
+                        lat = TOKYO_LAT + 0.01,
+                        lon = TOKYO_LON + 0.01,
+                        type = "LTE",
+                        rssi = -70,
+                        cellId = "TEST_CELL_1"
+                    ),
+                    CellLog(
+                        timestamp = currentTime,
+                        lat = TOKYO_LAT + 0.02,
+                        lon = TOKYO_LON + 0.02,
+                        type = "5G",
+                        rssi = -50,
+                        cellId = "TEST_CELL_2"
+                    ),
+                    CellLog(
+                        timestamp = currentTime,
+                        lat = TOKYO_LAT - 0.01,
+                        lon = TOKYO_LON - 0.01,
+                        type = "LTE",
+                        rssi = -90,
+                        cellId = "TEST_CELL_1"
+                    ),
+                    CellLog(
+                        timestamp = currentTime,
+                        lat = TOKYO_LAT - 0.02,
+                        lon = TOKYO_LON + 0.03,
+                        type = "5G",
+                        rssi = -45,
+                        cellId = "TEST_CELL_3"
+                    )
+                )
+                
+                cellDatabase.insertCellLogs(sampleData)
+                Log.d(TAG, "Sample data inserted successfully")
+                
+                handler.post {
+                    Toast.makeText(this@MapsActivity, "Sample data added for testing", Toast.LENGTH_SHORT).show()
+                    updateMapData() // Refresh the map
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error adding sample data: ${e.message}", e)
+                handler.post {
+                    Toast.makeText(this@MapsActivity, "Error adding sample data: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
