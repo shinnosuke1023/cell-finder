@@ -24,7 +24,6 @@ import com.google.maps.android.heatmaps.WeightedLatLng
 import java.util.concurrent.Executors
 import kotlin.math.floor
 import kotlin.math.cos
-import kotlin.math.toRadians
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -338,7 +337,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             // 1 degree latitude ≈ 111,320 meters
             // 1 degree longitude ≈ 111,320 * cos(latitude) meters
             val latDegreesPerGrid = gridSizeMeters / 111320.0
-            val lonDegreesPerGrid = gridSizeMeters / (111320.0 * cos(toRadians(log.lat)))
+            val lonDegreesPerGrid = gridSizeMeters / (111320.0 * cos(Math.toRadians(log.lat)))
             
             // Calculate grid indices (floor to create proper grid cells)
             val gridLatIndex = floor(log.lat / latDegreesPerGrid).toInt()
@@ -444,7 +443,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             
             // Same corrected grid calculation as heatmap
             val latDegreesPerGrid = gridSizeMeters / 111320.0
-            val lonDegreesPerGrid = gridSizeMeters / (111320.0 * cos(toRadians(log.lat)))
+            val lonDegreesPerGrid = gridSizeMeters / (111320.0 * cos(Math.toRadians(log.lat)))
             
             val gridLatIndex = floor(log.lat / latDegreesPerGrid).toInt()
             val gridLonIndex = floor(log.lon / lonDegreesPerGrid).toInt()
