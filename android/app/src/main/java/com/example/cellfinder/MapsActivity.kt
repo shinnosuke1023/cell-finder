@@ -55,12 +55,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     // Data and state
     private var allCellLogs = listOf<CellLog>()
     private var allCellIds = listOf<String>()
-    private var currentDisplayMode = DisplayMode.HEATMAP
+    private var currentDisplayMode = DisplayMode.RSSI_CIRCLES
     private var selectedCellId: String? = null
     
     enum class DisplayMode(val displayName: String) {
-        HEATMAP("Heatmap"),
         RSSI_CIRCLES("RSSI Circles"),
+        HEATMAP("Heatmap"),
         PINS("Pins")
     }
 
