@@ -31,7 +31,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     companion object {
         private const val TAG = "MapsActivity"
-        private const val UPDATE_INTERVAL_MS = 30000L // 30 seconds
+        private const val UPDATE_INTERVAL_MS = 5000L // 5 seconds
         private const val DEFAULT_ZOOM = 12f
         private const val TOKYO_LAT = 35.6762
         private const val TOKYO_LON = 139.6503
