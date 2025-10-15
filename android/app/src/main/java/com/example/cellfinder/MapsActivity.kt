@@ -1,11 +1,13 @@
 package com.example.cellfinder
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.telephony.TelephonyManager
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
@@ -44,6 +46,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var cellIdSpinner: Spinner
     private lateinit var displayModeSpinner: Spinner
     private lateinit var refreshButton: Button
+    private lateinit var currentCellInfoTextView: TextView
     
     // Map elements
     private val cellMarkers = mutableListOf<Marker>()
@@ -51,6 +54,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val debugCircles = mutableListOf<Circle>()
     private val rssiCircles = mutableListOf<Circle>()
     private var heatmapTileOverlay: TileOverlay? = null
+    
+    // Circle metadata for click handling
+    private val circleMetadata = mutableMapOf<String, CellLog>()
     
     // Data and state
     private var allCellLogs = listOf<CellLog>()
@@ -89,6 +95,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         cellIdSpinner = findViewById(R.id.cellIdSpinner)
         displayModeSpinner = findViewById(R.id.displayModeSpinner)
         refreshButton = findViewById(R.id.refreshButton)
+        currentCellInfoTextView = findViewById(R.id.currentCellInfo)
         
         // Setup display mode spinner
         val displayModes = DisplayMode.values().map { it.displayName }
@@ -137,6 +144,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         // Disable buildings layer for better heatmap visibility
         googleMap.isBuildingsEnabled = false
+        
+        // Set up circle click listener for RSSI circles
+        googleMap.setOnCircleClickListener { circle ->
+            handleCircleClick(circle)
+        }
         
         // Enable location if permitted
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == 
@@ -203,6 +215,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     updateCellIdSpinner()
                     updateMapVisualization()
                     updateBaseStationMarkers(estimatedPositions)
+                    updateCurrentCellInfo()
                 }
                 
             } catch (e: Exception) {
@@ -433,6 +446,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun createRssiCircles(cellLogs: List<CellLog>) {
         Log.d(TAG, "Creating RSSI circles with ${cellLogs.size} cell logs")
         
+        // Clear previous circle metadata
+        circleMetadata.clear()
+        
         // Use same grid-based approach as heatmap
         val gridSizeMeters = 25.0
         val gridMap = mutableMapOf<String, CellLog>()
@@ -470,9 +486,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     .fillColor(rssiColor)
                     .strokeColor(Color.argb(200, 0, 0, 0)) // Black border
                     .strokeWidth(1f)
+                    .clickable(true) // Make circle clickable
             )
             
             rssiCircles.add(circle)
+            
+            // Store metadata for this circle using its ID
+            val circleId = circle.id
+            circleMetadata[circleId] = log
             
             // Store samples for logging
             if (rssiSamples.size < 5) {
@@ -551,9 +572,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun updateBaseStationMarkers(estimatedPositions: List<EstimatedBaseStation>) {
-        // Clear existing base station markers
+        // Clear existing base station markers and debug circles
         baseStationMarkers.forEach { it.remove() }
         baseStationMarkers.clear()
+        debugCircles.forEach { it.remove() }
+        debugCircles.clear()
         
         for (baseStation in estimatedPositions) {
             if (baseStation.lat == null || baseStation.lon == null) continue
@@ -570,8 +593,38 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             )
             
             marker?.let { baseStationMarkers.add(it) }
+            
+            // Add debug circles showing estimated coverage radius based on observations
+            // Get all observations for this cell ID to calculate debug circles
+            val cellObservations = allCellLogs.filter { it.cellId == baseStation.cellId }
+            for (observation in cellObservations) {
+                if (observation.lat == null || observation.lon == null || observation.rssi == null) continue
+                
+                // Calculate estimated distance from RSSI (simple path loss model)
+                // Using free space path loss: d = 10^((RSSI_ref - RSSI) / (10 * n))
+                // where n=2 (path loss exponent) and RSSI_ref = -40dBm at 1m
+                val rssiRef = -40.0
+                val pathLossExponent = 2.0
+                val rssi = observation.rssi.toDouble()
+                val distanceMeters = Math.pow(10.0, (rssiRef - rssi) / (10.0 * pathLossExponent))
+                
+                // Clamp distance to reasonable values (10m to 5000m)
+                val clampedDistance = Math.max(10.0, Math.min(5000.0, distanceMeters))
+                
+                // Draw debug circle with low opacity
+                val circle = googleMap.addCircle(
+                    CircleOptions()
+                        .center(LatLng(observation.lat, observation.lon))
+                        .radius(clampedDistance)
+                        .strokeColor(Color.argb(100, 102, 102, 102)) // Semi-transparent gray
+                        .strokeWidth(1f)
+                        .fillColor(Color.TRANSPARENT)
+                )
+                
+                debugCircles.add(circle)
+            }
         }
-        Log.d(TAG, "Updated ${baseStationMarkers.size} base station markers")
+        Log.d(TAG, "Updated ${baseStationMarkers.size} base station markers and ${debugCircles.size} debug circles")
     }
 
     private fun clearMapElements() {
@@ -598,6 +651,109 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         debugCircles.clear()
         
         Log.d(TAG, "Cleared: $pinCount pins, heatmap: $hadHeatmap, $circleCount RSSI circles, $debugCount debug circles")
+    }
+    
+    private fun handleCircleClick(circle: Circle) {
+        // Get metadata for the clicked circle
+        val cellLog = circleMetadata[circle.id]
+        
+        if (cellLog != null) {
+            // Find the estimated base station for this cell ID
+            val baseStation = baseStationMarkers.find { marker ->
+                marker.snippet?.contains("Cell ID: ${cellLog.cellId}") == true
+            }
+            
+            val baseStationInfo = if (baseStation != null) {
+                val position = baseStation.position
+                "Estimated Base Station: ${position.latitude}, ${position.longitude}"
+            } else {
+                "No base station estimate available"
+            }
+            
+            // Show detailed information in a dialog
+            AlertDialog.Builder(this)
+                .setTitle("Cell Tower Information")
+                .setMessage("""
+                    Cell ID: ${cellLog.cellId ?: "Unknown"}
+                    Type: ${cellLog.type ?: "Unknown"}
+                    RSSI: ${cellLog.rssi} dBm
+                    
+                    Observation Location:
+                    Lat: ${cellLog.lat}
+                    Lon: ${cellLog.lon}
+                    
+                    $baseStationInfo
+                    
+                    Timestamp: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(cellLog.timestamp))}
+                """.trimIndent())
+                .setPositiveButton("OK", null)
+                .show()
+            
+            Log.d(TAG, "Circle clicked: Cell ID=${cellLog.cellId}, RSSI=${cellLog.rssi}dBm")
+        } else {
+            // This might be a debug circle, show basic info
+            Toast.makeText(this, "Debug circle (coverage estimate)", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun updateCurrentCellInfo() {
+        // Check permissions
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != 
+            PackageManager.PERMISSION_GRANTED) {
+            currentCellInfoTextView.visibility = android.view.View.GONE
+            return
+        }
+        
+        try {
+            val telephonyManager = getSystemService(TELEPHONY_SERVICE) as? TelephonyManager
+            val cellInfo = telephonyManager?.allCellInfo
+            
+            if (cellInfo.isNullOrEmpty()) {
+                currentCellInfoTextView.text = "No current cell information available"
+                currentCellInfoTextView.visibility = android.view.View.VISIBLE
+                return
+            }
+            
+            // Find the registered (connected) cell
+            val connectedCell = cellInfo.firstOrNull { it.isRegistered }
+            
+            if (connectedCell != null) {
+                val cellDetails = when (connectedCell) {
+                    is android.telephony.CellInfoGsm -> {
+                        val identity = connectedCell.cellIdentity
+                        val signal = connectedCell.cellSignalStrength
+                        "GSM - CID: ${identity.cid}, RSSI: ${signal.dbm} dBm"
+                    }
+                    is android.telephony.CellInfoWcdma -> {
+                        val identity = connectedCell.cellIdentity
+                        val signal = connectedCell.cellSignalStrength
+                        "WCDMA - CID: ${identity.cid}, RSSI: ${signal.dbm} dBm"
+                    }
+                    is android.telephony.CellInfoLte -> {
+                        val identity = connectedCell.cellIdentity
+                        val signal = connectedCell.cellSignalStrength
+                        "LTE - CI: ${identity.ci}, RSRP: ${signal.dbm} dBm"
+                    }
+                    is android.telephony.CellInfoNr -> {
+                        val identity = connectedCell.cellIdentity as android.telephony.CellIdentityNr
+                        val signal = connectedCell.cellSignalStrength as android.telephony.CellSignalStrengthNr
+                        "5G NR - NCI: ${identity.nci}, SS-RSRP: ${signal.dbm} dBm"
+                    }
+                    else -> "Unknown cell type"
+                }
+                
+                currentCellInfoTextView.text = "📱 Connected: $cellDetails"
+                currentCellInfoTextView.visibility = android.view.View.VISIBLE
+            } else {
+                currentCellInfoTextView.text = "No connected cell found (${cellInfo.size} cells detected)"
+                currentCellInfoTextView.visibility = android.view.View.VISIBLE
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting current cell info: ${e.message}", e)
+            currentCellInfoTextView.text = "Error getting cell info"
+            currentCellInfoTextView.visibility = android.view.View.VISIBLE
+        }
     }
 
     private fun fitCameraToData(cellLogs: List<CellLog>) {
