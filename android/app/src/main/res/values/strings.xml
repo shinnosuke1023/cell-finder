@@ -9,4 +9,6 @@
     <string name="btn_start_logging">Start Logging</string>
     <string name="btn_stop_logging">Stop Logging</string>
     <string name="btn_show_map">Show Map</string>
+    <string name="btn_start_tracking">Start EKF Tracking</string>
+    <string name="btn_stop_tracking">Stop EKF Tracking</string>
 </resources>

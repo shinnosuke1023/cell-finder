@@ -24,6 +24,28 @@
         android:layout_height="wrap_content"
         android:text="@string/btn_show_map"
         android:layout_marginTop="12dp" />
+    
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="EKF-Based Base Station Tracking"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textStyle="bold" />
+    
+    <Button
+        android:id="@+id/btnTrackStart"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_start_tracking"
+        android:layout_marginTop="12dp" />
+    
+    <Button
+        android:id="@+id/btnTrackStop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_stop_tracking"
+        android:layout_marginTop="12dp" />
 
     <TextView
         android:id="@+id/statusView"
