@@ -44,8 +44,17 @@ def log():
 def map_data():
     """通常の観測ログを返す（地図表示用）"""
     c = conn.cursor()
+    cell_id_filter = request.args.get('cell_id', None)
     one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
-    c.execute("SELECT timestamp, lat, lon, type, rssi, cell_id FROM logs WHERE timestamp > ?", (one_hour_ago_ms,))
+    
+    params = [one_hour_ago_ms]
+    query = "SELECT timestamp, lat, lon, type, rssi, cell_id FROM logs WHERE timestamp > ?"
+    
+    if cell_id_filter:
+        query += " AND cell_id = ?"
+        params.append(cell_id_filter)
+    
+    c.execute(query, tuple(params))
     rows = c.fetchall()
     result = []
     for r in rows:
@@ -58,6 +67,46 @@ def map_data():
             "cell_id": r[5]
         })
     return jsonify(result)
+
+
+@app.route('/heatmap_data')
+def heatmap_data():
+    """ヒートマップ用のデータを返す"""
+    c = conn.cursor()
+    cell_id_filter = request.args.get('cell_id', None)
+    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    
+    params = [one_hour_ago_ms]
+    query = "SELECT timestamp, lat, lon, type, rssi, cell_id FROM logs WHERE timestamp > ?"
+    
+    if cell_id_filter:
+        query += " AND cell_id = ?"
+        params.append(cell_id_filter)
+    
+    c.execute(query, tuple(params))
+    rows = c.fetchall()
+    
+    # ヒートマップ用のデータ形式 [lat, lon, intensity]
+    heatmap_points = []
+    for r in rows:
+        if r[1] is not None and r[2] is not None:  # lat, lon not null
+            # RSSI値を強度に変換（-20から-120の範囲を0.1から1.0にマッピング）
+            rssi = r[4] if r[4] is not None else -100
+            intensity = max(0.1, min(1.0, (rssi + 120) / 100))
+            heatmap_points.append([r[1], r[2], intensity])
+    
+    return jsonify(heatmap_points)
+
+
+@app.route('/cell_ids')
+def get_cell_ids():
+    """利用可能なセルIDのリストを返す"""
+    c = conn.cursor()
+    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    c.execute("SELECT DISTINCT cell_id FROM logs WHERE timestamp > ? AND cell_id IS NOT NULL ORDER BY cell_id", (one_hour_ago_ms,))
+    rows = c.fetchall()
+    cell_ids = [row[0] for row in rows]
+    return jsonify(cell_ids)
 
 
 def _rssi_to_distance_m(rssi_dbm: float, n: float, ref_rssi_dbm: float, ref_dist_m: float) -> float:
@@ -296,75 +345,211 @@ def map_page():
 <head>
   <meta charset="utf-8" />
   <title>Cell Logger Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 90vh; width: 100%; }
+    #map { height: 80vh; width: 100%; background: #f0f0f0; position: relative; }
+    #controls { margin: 10px 0; }
+    .filter-control { margin: 0 10px 10px 0; display: inline-block; }
+    .filter-control label { margin-right: 5px; }
+    .filter-control select, .filter-control input { padding: 5px; }
+    #status { margin: 10px 0; padding: 10px; background: #e8f4f8; border: 1px solid #bee5eb; }
+    .data-point { position: absolute; width: 10px; height: 10px; border-radius: 50%; z-index: 1000; cursor: pointer; }
+    .heatmap-point { opacity: 0.7; }
+    .pin-point { background: blue; }
+    .base-station { background: red; width: 15px; height: 15px; }
   </style>
 </head>
 <body>
-  <h3>Cell Logger Map</h3>
-  <div id="map"></div>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <h3>Cell Logger Map - Heatmap View</h3>
+  <div id="controls">
+    <div class="filter-control">
+      <label for="cellIdFilter">Cell ID Filter:</label>
+      <select id="cellIdFilter">
+        <option value="">All Cell IDs</option>
+      </select>
+    </div>
+    <div class="filter-control">
+      <label for="displayMode">Display Mode:</label>
+      <select id="displayMode">
+        <option value="heatmap">Heatmap</option>
+        <option value="pins">Pins (Original)</option>
+      </select>
+    </div>
+    <div class="filter-control">
+      <button onclick="updateMap()">Refresh</button>
+    </div>
+  </div>
+  <div id="status">Loading map data...</div>
+  <div id="map">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+      <p>Heatmap Visualization</p>
+      <p id="mapInfo">Loading data...</p>
+    </div>
+  </div>
+  
+  <!-- Fallback implementation without external dependencies -->
   <script>
-    var map = L.map('map').setView([35.0, 135.0], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    var mapElement = document.getElementById('map');
+    var statusElement = document.getElementById('status');
+    var currentData = [];
+    var currentMode = 'heatmap';
+    
+    function clearMap() {
+      var points = mapElement.querySelectorAll('.data-point');
+      points.forEach(function(p) { p.remove(); });
+    }
+    
+    function getColorFromIntensity(intensity) {
+      // Convert intensity (0-1) to color
+      if (intensity > 0.8) return '#ff0000'; // red
+      if (intensity > 0.6) return '#ff8000'; // orange  
+      if (intensity > 0.4) return '#ffff00'; // yellow
+      if (intensity > 0.2) return '#80ff00'; // yellow-green
+      return '#0080ff'; // blue
+    }
+    
+    function createDataPoint(lat, lon, intensity, info, isBaseStation) {
+      var point = document.createElement('div');
+      point.className = 'data-point ' + (currentMode === 'heatmap' ? 'heatmap-point' : 'pin-point');
+      if (isBaseStation) point.className += ' base-station';
+      
+      // Simple positioning (would need proper map projection in real implementation)
+      var x = ((lon - 135.0) * 10000 + 50) + '%';
+      var y = ((35.0 - lat) * 10000 + 50) + '%';
+      point.style.left = x;
+      point.style.top = y;
+      
+      if (currentMode === 'heatmap' && !isBaseStation) {
+        point.style.background = getColorFromIntensity(intensity);
+        point.style.width = (intensity * 20 + 5) + 'px';
+        point.style.height = (intensity * 20 + 5) + 'px';
+        point.style.opacity = intensity;
+      }
+      
+      point.title = info;
+      point.onclick = function() { alert(info); };
+      mapElement.appendChild(point);
+    }
 
-    var overlayLayers = [];
-    function clearOverlays() {
-      overlayLayers.forEach(function(l){ map.removeLayer(l); });
-      overlayLayers = [];
+    function loadCellIds() {
+      fetch('/cell_ids')
+        .then(res => res.json())
+        .then(cellIds => {
+          var select = document.getElementById('cellIdFilter');
+          // Clear existing options except "All"
+          while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+          }
+          // Add cell ID options
+          cellIds.forEach(cellId => {
+            var option = document.createElement('option');
+            option.value = cellId;
+            option.textContent = cellId;
+            select.appendChild(option);
+          });
+          statusElement.innerHTML = 'Found ' + cellIds.length + ' cell IDs: ' + cellIds.join(', ');
+        })
+        .catch(err => {
+          console.error('Failed to load cell IDs:', err);
+          statusElement.innerHTML = 'Error loading cell IDs: ' + err.message;
+        });
     }
 
     function updateMap() {
-      clearOverlays();
-
-      // 通常の観測ログ
-      fetch('/map_data')
+      clearMap();
+      currentMode = document.getElementById('displayMode').value;
+      var cellIdFilter = document.getElementById('cellIdFilter').value;
+      
+      statusElement.innerHTML = 'Loading data for mode: ' + currentMode + 
+        (cellIdFilter ? ' (Cell ID: ' + cellIdFilter + ')' : ' (All cells)');
+      
+      if (currentMode === 'heatmap') {
+        updateHeatmap(cellIdFilter);
+      } else {
+        updatePins(cellIdFilter);
+      }
+      
+      // Always show estimated base stations
+      updateBaseStations();
+    }
+    
+    function updateHeatmap(cellIdFilter) {
+      var url = '/heatmap_data';
+      if (cellIdFilter) {
+        url += '?cell_id=' + encodeURIComponent(cellIdFilter);
+      }
+      
+      fetch(url)
         .then(res => res.json())
         .then(data => {
-          data.forEach(log => {
+          document.getElementById('mapInfo').innerHTML = 
+            'Heatmap: ' + data.length + ' data points' + 
+            (cellIdFilter ? ' for Cell ID: ' + cellIdFilter : '');
+          
+          data.forEach(function(point) {
+            var lat = point[0];
+            var lon = point[1]; 
+            var intensity = point[2];
+            var info = 'Heatmap Point\\nLat: ' + lat + '\\nLon: ' + lon + '\\nIntensity: ' + intensity.toFixed(2);
+            createDataPoint(lat, lon, intensity, info, false);
+          });
+          
+          statusElement.innerHTML = 'Heatmap loaded: ' + data.length + ' points';
+        })
+        .catch(err => {
+          console.error('Failed to load heatmap data:', err);
+          statusElement.innerHTML = 'Error loading heatmap: ' + err.message;
+        });
+    }
+    
+    function updatePins(cellIdFilter) {
+      var url = '/map_data';
+      if (cellIdFilter) {
+        url += '?cell_id=' + encodeURIComponent(cellIdFilter);
+      }
+      
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('mapInfo').innerHTML = 
+            'Pins: ' + data.length + ' data points' + 
+            (cellIdFilter ? ' for Cell ID: ' + cellIdFilter : '');
+          
+          data.forEach(function(log) {
             if (log.lat != null && log.lon != null) {
-              var m = L.circleMarker([log.lat, log.lon], {
-                radius: 4,
-                color: "blue"
-              }).bindPopup("Type: " + log.type + "<br>RSSI: " + log.rssi + "<br>Cell ID: " + log.cell_id);
-              m.addTo(map); overlayLayers.push(m);
+              var info = 'Pin\\nType: ' + log.type + '\\nRSSI: ' + log.rssi + '\\nCell ID: ' + log.cell_id;
+              createDataPoint(log.lat, log.lon, 0.5, info, false);
             }
           });
+          
+          statusElement.innerHTML = 'Pins loaded: ' + data.length + ' points';
+        })
+        .catch(err => {
+          console.error('Failed to load pin data:', err);
+          statusElement.innerHTML = 'Error loading pins: ' + err.message;
         });
-
-      // 基地局推定位置（デバッグ円付き）
+    }
+    
+    function updateBaseStations() {
       fetch('/cell_map?debug=1')
         .then(res => res.json())
         .then(cells => {
-          cells.forEach(cell => {
+          cells.forEach(function(cell) {
             if (cell.lat != null && cell.lon != null) {
-              var cm = L.circleMarker([cell.lat, cell.lon], {
-                radius: 8,
-                color: "red"
-              }).bindPopup("推定基地局<br>Cell ID: " + cell.cell_id + "<br>Type: " + cell.type + "<br>観測数: " + cell.count);
-              cm.addTo(map); overlayLayers.push(cm);
-            }
-            if (cell.debug && cell.debug.circles) {
-              cell.debug.circles.forEach(c => {
-                var circ = L.circle([c.lat, c.lon], {
-                  radius: c.radius_m,
-                  color: '#666',
-                  weight: 1,
-                  opacity: 0.4,
-                  fill: false
-                });
-                circ.addTo(map); overlayLayers.push(circ);
-              });
+              var info = 'Base Station\\nCell ID: ' + cell.cell_id + '\\nType: ' + cell.type + '\\nCount: ' + cell.count;
+              createDataPoint(cell.lat, cell.lon, 1.0, info, true);
             }
           });
-        });
+        })
+        .catch(err => console.error('Failed to load base station data:', err));
     }
 
+    // Initialize
+    loadCellIds();
     updateMap();
-    setInterval(updateMap, 30000); // 30秒ごとに更新
+    setInterval(function() {
+      loadCellIds();
+      updateMap();
+    }, 30000); // 30秒ごとに更新
   </script>
 </body>
 </html>
