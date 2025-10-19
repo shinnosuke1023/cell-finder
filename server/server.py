@@ -170,6 +170,155 @@ def _circle_intersections(x0, y0, r0, x1, y1, r1):
     return [(p1[0], p1[1], w_angle), (p2[0], p2[1], w_angle)]
 
 
+def _wls_trilateration(pts, max_iter=20, convergence_threshold=0.1):
+    """Weighted Least Squares (WLS) による三辺測量
+    
+    反復的に位置を推定する高度なアルゴリズム。
+    各観測点からの距離誤差を最小化するように位置を推定する。
+    
+    Args:
+        pts: [(x, y, r), ...] 観測点の座標と推定距離のリスト
+        max_iter: 最大反復回数
+        convergence_threshold: 収束判定の閾値（メートル）
+    
+    Returns:
+        (x, y) 推定位置、または None
+    """
+    if len(pts) < 3:
+        return None
+    
+    # 初期推定値：観測点の重心
+    x_est = sum(p[0] for p in pts) / len(pts)
+    y_est = sum(p[1] for p in pts) / len(pts)
+    
+    for iteration in range(max_iter):
+        # ヤコビ行列 H と残差ベクトル b を構築
+        H = []
+        b = []
+        weights = []
+        
+        for (xi, yi, ri) in pts:
+            dx = x_est - xi
+            dy = y_est - yi
+            dist = math.hypot(dx, dy)
+            
+            if dist < 1e-6:
+                dist = 1e-6  # ゼロ除算を避ける
+            
+            # ヤコビ行列の行: [∂f/∂x, ∂f/∂y] = [(x-xi)/d, (y-yi)/d]
+            H.append([dx / dist, dy / dist])
+            
+            # 残差: 推定距離 - 観測距離
+            b.append(dist - ri)
+            
+            # 重み：距離が小さいほど信頼性が高い
+            # また、RSSI測定の不確実性を考慮
+            weight = 1.0 / (1.0 + ri / 1000.0)  # 距離に応じた重み
+            weights.append(weight)
+        
+        # 重み行列 W
+        W = [[weights[i] if i == j else 0.0 for j in range(len(weights))] 
+             for i in range(len(weights))]
+        
+        # 最小二乗解: Δx = (H^T W H)^(-1) H^T W b
+        try:
+            # H^T W を計算
+            HT_W = [[sum(H[k][i] * W[k][j] for k in range(len(H))) 
+                    for j in range(len(H))] for i in range(2)]
+            
+            # H^T W H を計算 (2x2 行列)
+            HTW_H = [[sum(HT_W[i][k] * H[k][j] for k in range(len(H))) 
+                     for j in range(2)] for i in range(2)]
+            
+            # 2x2 行列の逆行列を計算
+            det = HTW_H[0][0] * HTW_H[1][1] - HTW_H[0][1] * HTW_H[1][0]
+            if abs(det) < 1e-10:
+                # 特異行列の場合は現在の推定値を返す
+                break
+            
+            HTW_H_inv = [
+                [HTW_H[1][1] / det, -HTW_H[0][1] / det],
+                [-HTW_H[1][0] / det, HTW_H[0][0] / det]
+            ]
+            
+            # H^T W b を計算
+            HTW_b = [sum(HT_W[i][k] * b[k] for k in range(len(b))) for i in range(2)]
+            
+            # Δx = (H^T W H)^(-1) H^T W b を計算
+            delta_x = sum(HTW_H_inv[0][i] * HTW_b[i] for i in range(2))
+            delta_y = sum(HTW_H_inv[1][i] * HTW_b[i] for i in range(2))
+            
+            # 位置を更新
+            x_est -= delta_x
+            y_est -= delta_y
+            
+            # 収束判定
+            correction = math.hypot(delta_x, delta_y)
+            if correction < convergence_threshold:
+                break
+                
+        except Exception:
+            # 数値計算エラーの場合は現在の推定値を返す
+            break
+    
+    return (x_est, y_est)
+
+
+def _robust_trilateration(pts, outlier_threshold=3.0):
+    """ロバストな三辺測量（外れ値除去付き）
+    
+    RANSAC風のアプローチで外れ値を除去してから推定を行う。
+    
+    Args:
+        pts: [(x, y, r), ...] 観測点の座標と推定距離のリスト
+        outlier_threshold: 外れ値判定の閾値（標準偏差の倍数）
+    
+    Returns:
+        (x, y) 推定位置、または None
+    """
+    if len(pts) < 3:
+        return None
+    
+    # WLSで初期推定
+    initial_est = _wls_trilateration(pts)
+    if initial_est is None:
+        return None
+    
+    x_est, y_est = initial_est
+    
+    # 各観測点からの残差を計算
+    residuals = []
+    for (xi, yi, ri) in pts:
+        dist = math.hypot(x_est - xi, y_est - yi)
+        residual = abs(dist - ri)
+        residuals.append(residual)
+    
+    # 残差の中央値と MAD (Median Absolute Deviation) を計算
+    sorted_residuals = sorted(residuals)
+    median = sorted_residuals[len(sorted_residuals) // 2]
+    mad = sorted([abs(r - median) for r in residuals])[len(residuals) // 2]
+    
+    # MADが0の場合はすべてのデータが一致しているので、そのまま返す
+    if mad < 1e-6:
+        return (x_est, y_est)
+    
+    # 外れ値を除去（修正Z-スコアを使用）
+    threshold = outlier_threshold * 1.4826 * mad  # 1.4826はMADを標準偏差に変換する係数
+    inliers = []
+    for i, (xi, yi, ri) in enumerate(pts):
+        if residuals[i] - median < threshold:
+            inliers.append((xi, yi, ri))
+    
+    # インライアが十分にある場合は再推定
+    if len(inliers) >= 3:
+        result = _wls_trilateration(inliers)
+        if result is not None:
+            return result
+    
+    # インライアが少ない場合は初期推定を返す
+    return (x_est, y_est)
+
+
 @app.route('/cell_map')
 def cell_map():
     """セルごとに「受信電力→距離」の円の交点を投票して基地局位置を推定して返す。
@@ -179,7 +328,11 @@ def cell_map():
       - ref_rssi: 参照距離 ref_dist[m] における RSSI[dBm]（既定 -40）
       - ref_dist: 参照距離[m]（既定 1.0）
       - bandwidth_m: 交点クラスタリング半径[m]（既定 150）
-      - method: 'accum'（交点投票。既定） or 'centroid'（従来の加重重心）
+      - method: 推定方法
+          * 'wls' - Weighted Least Squares（重み付き最小二乗法、高精度、既定）
+          * 'robust' - ロバスト推定（外れ値除去付きWLS）
+          * 'accum' - 交点投票法（従来の高度な方法）
+          * 'centroid' - 加重重心法（シンプルな方法）
       - debug: 1 でデバッグ情報（各観測円）を返す
     重複排除:
       - 同一 (cell_id, type, lat, lon) のレコードが複数ある場合は、最新 (timestamp が最大) のみ利用。
@@ -192,7 +345,7 @@ def cell_map():
     ref_rssi = request.args.get('ref_rssi', default=-40.0, type=float)
     ref_dist = request.args.get('ref_dist', default=1.0, type=float)
     bandwidth_m = request.args.get('bandwidth_m', default=150.0, type=float)
-    method = request.args.get('method', default='accum', type=str)
+    method = request.args.get('method', default='wls', type=str)
     debug_flag = request.args.get('debug', default=0, type=int)
 
     # 期間フィルタ
@@ -272,6 +425,36 @@ def cell_map():
             if debug_flag:
                 debug_circles.append({"lat": log["lat"], "lon": log["lon"], "radius_m": d_m})
 
+        # 推定方法に応じて処理を分岐
+        if method == 'wls':
+            # Weighted Least Squares 法
+            est_xy = _wls_trilateration(pts)
+            if est_xy is None:
+                est_latlon = centroid_estimate()
+                out = {"cell_id": cell_id, "type": ctype, "lat": est_latlon[0], "lon": est_latlon[1], "count": len(logs)}
+            else:
+                est_lat, est_lon = _xy_to_ll(est_xy[0], est_xy[1], lat0, lon0)
+                out = {"cell_id": cell_id, "type": ctype, "lat": est_lat, "lon": est_lon, "count": len(logs)}
+            if debug_flag:
+                out["debug"] = {"circles": debug_circles, "method": "wls"}
+            result.append(out)
+            continue
+
+        elif method == 'robust':
+            # ロバスト推定（外れ値除去付き）
+            est_xy = _robust_trilateration(pts)
+            if est_xy is None:
+                est_latlon = centroid_estimate()
+                out = {"cell_id": cell_id, "type": ctype, "lat": est_latlon[0], "lon": est_latlon[1], "count": len(logs)}
+            else:
+                est_lat, est_lon = _xy_to_ll(est_xy[0], est_xy[1], lat0, lon0)
+                out = {"cell_id": cell_id, "type": ctype, "lat": est_lat, "lon": est_lon, "count": len(logs)}
+            if debug_flag:
+                out["debug"] = {"circles": debug_circles, "method": "robust"}
+            result.append(out)
+            continue
+
+        # 以下は 'accum' 法（交点投票）
         # 全ペアの円交点を収集（交差角重み付き）
         intersections = []
         n = len(pts)
@@ -330,7 +513,7 @@ def cell_map():
             "count": len(logs)
         }
         if debug_flag:
-            out["debug"] = {"circles": debug_circles}
+            out["debug"] = {"circles": debug_circles, "method": "accum"}
         result.append(out)
 
     return jsonify(result)
