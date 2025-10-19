@@ -205,7 +205,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     refRssiDbm = -40.0,
                     refDistM = 1.0,
                     bandwidthM = 150.0,
-                    method = "robust"  // Use robust method for best accuracy with outlier handling
+                    method = "accum"  // Use proven circle intersection method
                 )
                 
                 Log.d(TAG, "Found ${allCellLogs.size} recent logs, ${allCellIds.size} cell IDs, and ${estimatedPositions.size} estimated positions")

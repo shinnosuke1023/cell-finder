@@ -346,7 +346,7 @@ def cell_map():
     ref_rssi = request.args.get('ref_rssi', default=-40.0, type=float)
     ref_dist = request.args.get('ref_dist', default=1.0, type=float)
     bandwidth_m = request.args.get('bandwidth_m', default=150.0, type=float)
-    method = request.args.get('method', default='wls', type=str)
+    method = request.args.get('method', default='accum', type=str)
     debug_flag = request.args.get('debug', default=0, type=int)
 
     # 期間フィルタ

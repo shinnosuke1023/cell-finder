@@ -4,12 +4,14 @@ This document describes the advanced positioning algorithms implemented in the C
 
 ## Overview
 
-The project now includes four positioning algorithms with increasing sophistication:
+The project includes four positioning algorithms with increasing sophistication:
 
 1. **Centroid Method** (`centroid`) - Simple weighted average (基本的な加重平均法)
-2. **Circle Intersection** (`accum`) - Geometric intersection voting (幾何学的交点投票法)
-3. **Weighted Least Squares** (`wls`) - Iterative optimization (反復最適化法) ⭐ **Default**
-4. **Robust Estimation** (`robust`) - WLS with outlier removal (外れ値除去付き最適化) ⭐ **Recommended**
+2. **Circle Intersection** (`accum`) - Geometric intersection voting (幾何学的交点投票法) ⭐ **Default & Proven**
+3. **Weighted Least Squares** (`wls`) - Iterative optimization (反復最適化法) ⚠️ **Experimental**
+4. **Robust Estimation** (`robust`) - WLS with outlier removal (外れ値除去付き最適化) ⚠️ **Experimental**
+
+**⚠️ Important Note:** The WLS and Robust methods are experimental and may produce incorrect results in some scenarios. The Circle Intersection (accum) method remains the default and most reliable option. Use WLS/Robust methods only if you have verified they work correctly with your data.
 
 ## Algorithm Details
 
@@ -135,20 +137,16 @@ Where:
 
 ## Performance Comparison
 
-Based on realistic test with 6 observations (5 good + 1 outlier with 5× distance error):
+Based on **synthetic test** with 6 observations (5 good + 1 outlier with 5× distance error):
 
 | Method    | Error (m) | Rank | Notes                          |
 |-----------|-----------|------|--------------------------------|
-| Robust    | **16.4**  | 🥇 1 | Successfully removed outlier   |
-| Accum     | 33.2      | 🥈 2 | Somewhat affected by outlier   |
+| Robust    | **16.4**  | 🥇 1 | Successfully removed outlier (synthetic test)   |
+| Accum     | 33.2      | 🥈 2 | Proven method, works reliably  |
 | Centroid  | 45.6      | 🥉 3 | Simple average affected        |
-| WLS       | 199.8     | 4    | Severely affected by outlier   |
+| WLS       | 199.8     | 4    | Severely affected by outlier (synthetic test)   |
 
-**Key findings:**
-- **Robust** method achieved **64% better accuracy** than simple centroid
-- **Robust** method was **92% better** than WLS alone (which was affected by outlier)
-- **Accum** method showed good middle-ground performance
-- WLS without outlier removal is vulnerable to bad measurements
+**⚠️ Important:** These results are from synthetic test data. Real-world performance may vary significantly. The **Accum (Circle Intersection)** method has been proven to work reliably in production and remains the recommended default.
 
 ## Usage
 

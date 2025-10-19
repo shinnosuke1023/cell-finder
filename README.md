@@ -6,11 +6,11 @@ Open http://<server_ip>:5000/map to see markers.
 
 ## Advanced Positioning Algorithms
 
-The project now includes four advanced algorithms for base station position estimation:
-- **WLS (Weighted Least Squares)**: Iterative optimization for high accuracy (Default)
-- **Robust**: WLS with automatic outlier detection (Recommended for production)
-- **Accum (Circle Intersection)**: Geometric voting method
-- **Centroid**: Simple weighted average
+The project includes four positioning algorithms:
+- **Accum (Circle Intersection)**: Geometric voting method (Default, proven)
+- **Centroid**: Simple weighted average (Fast fallback)
+- **WLS (Weighted Least Squares)**: Iterative optimization (Experimental)
+- **Robust**: WLS with automatic outlier detection (Experimental)
 
 See [ALGORITHMS.md](ALGORITHMS.md) for detailed documentation.
 
@@ -18,16 +18,16 @@ See [ALGORITHMS.md](ALGORITHMS.md) for detailed documentation.
 
 Server API:
 ```bash
-# Robust estimation (recommended)
-curl "http://localhost:5000/cell_map?method=robust"
-
-# WLS estimation (fast, accurate)
-curl "http://localhost:5000/cell_map?method=wls"
-
-# Circle intersection
+# Circle intersection (default, proven method)
 curl "http://localhost:5000/cell_map?method=accum"
 
-# Simple centroid
+# WLS estimation (experimental, requires 3+ observations)
+curl "http://localhost:5000/cell_map?method=wls"
+
+# Robust estimation (experimental)
+curl "http://localhost:5000/cell_map?method=robust"
+
+# Simple centroid (fast fallback)
 curl "http://localhost:5000/cell_map?method=centroid"
 ```
 
@@ -35,7 +35,7 @@ Android API:
 ```kotlin
 val results = BaseStationEstimator.estimateBaseStationPositions(
     cellLogsMap = cellLogs,
-    method = "robust"  // or "wls", "accum", "centroid"
+    method = "accum"  // or "wls", "robust", "centroid"
 )
 ```
 
