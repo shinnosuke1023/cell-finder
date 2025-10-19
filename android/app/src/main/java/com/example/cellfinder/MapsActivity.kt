@@ -15,6 +15,7 @@ import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
@@ -42,6 +43,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val handler = Handler(Looper.getMainLooper())
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
     
+    // ViewModel for EKF tracking
+    private lateinit var mapViewModel: MapViewModel
+    
     // UI Components
     private lateinit var cellIdSpinner: Spinner
     private lateinit var displayModeSpinner: Spinner
@@ -55,6 +59,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val rssiCircles = mutableListOf<Circle>()
     private var heatmapTileOverlay: TileOverlay? = null
     
+    // EKF tracking map elements
+    private var ekfBaseStationMarker: Marker? = null
+    private var ekfErrorCircle: Circle? = null
+    private var ekfUserMarker: Marker? = null
+    private var ekfTrajectoryPolyline: Polyline? = null
+    
     // Circle metadata for click handling
     private val circleMetadata = mutableMapOf<String, CellLog>()
     
@@ -67,7 +77,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     enum class DisplayMode(val displayName: String) {
         RSSI_CIRCLES("RSSI Circles"),
         HEATMAP("Heatmap"),
-        PINS("Pins")
+        PINS("Pins"),
+        EKF_TRACKING("EKF Tracking")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,6 +90,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Initialize database
         cellDatabase = CellDatabase(this)
         
+        // Initialize ViewModel
+        mapViewModel = androidx.lifecycle.ViewModelProvider(this)[MapViewModel::class.java]
+        
         // Initialize UI components
         initializeUI()
         
@@ -89,6 +103,116 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Set up action bar
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "Cell Tower Heatmap"
+        
+        // Observe ViewModel for EKF tracking updates
+        observeViewModel()
+    }
+    
+    private fun observeViewModel() {
+        // Observe tracking state for EKF updates
+        mapViewModel.trackingState.observe(this) { state ->
+            if (currentDisplayMode == DisplayMode.EKF_TRACKING && state != null) {
+                updateEkfVisualization(state)
+            }
+        }
+        
+        // Observe trajectory
+        mapViewModel.userTrajectory.observe(this) { trajectory ->
+            if (currentDisplayMode == DisplayMode.EKF_TRACKING) {
+                updateEkfTrajectory(trajectory)
+            }
+        }
+    }
+    
+    private fun updateEkfVisualization(state: TrackingState) {
+        if (!::googleMap.isInitialized) return
+        
+        Log.d(TAG, "Updating EKF visualization: estimated=(${state.estimatedLatitude}, ${state.estimatedLongitude})")
+        
+        // Update base station marker
+        val baseStationPos = LatLng(state.estimatedLatitude, state.estimatedLongitude)
+        
+        if (ekfBaseStationMarker == null) {
+            ekfBaseStationMarker = googleMap.addMarker(
+                MarkerOptions()
+                    .position(baseStationPos)
+                    .title("EKF Estimated Base Station")
+                    .snippet("Cell ID: ${state.cellId}\nError: ${String.format("%.1f", state.errorRadiusMeters)}m\nP0: ${String.format("%.1f", state.referencePower)} dBm\nη: ${String.format("%.2f", state.pathLossExponent)}")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+            )
+        } else {
+            ekfBaseStationMarker?.position = baseStationPos
+            ekfBaseStationMarker?.snippet = "Cell ID: ${state.cellId}\nError: ${String.format("%.1f", state.errorRadiusMeters)}m\nP0: ${String.format("%.1f", state.referencePower)} dBm\nη: ${String.format("%.2f", state.pathLossExponent)}"
+        }
+        
+        // Update error circle
+        if (ekfErrorCircle == null) {
+            ekfErrorCircle = googleMap.addCircle(
+                CircleOptions()
+                    .center(baseStationPos)
+                    .radius(state.errorRadiusMeters)
+                    .strokeColor(Color.argb(180, 255, 165, 0))  // Orange
+                    .strokeWidth(3f)
+                    .fillColor(Color.argb(50, 255, 165, 0))
+            )
+        } else {
+            ekfErrorCircle?.center = baseStationPos
+            ekfErrorCircle?.radius = state.errorRadiusMeters
+        }
+        
+        // Update user marker
+        val userPos = LatLng(state.userLatitude, state.userLongitude)
+        
+        if (ekfUserMarker == null) {
+            ekfUserMarker = googleMap.addMarker(
+                MarkerOptions()
+                    .position(userPos)
+                    .title("Your Location")
+                    .snippet("RSSI: ${state.rssi} dBm\nCell: ${state.cellType}")
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
+            )
+        } else {
+            ekfUserMarker?.position = userPos
+            ekfUserMarker?.snippet = "RSSI: ${state.rssi} dBm\nCell: ${state.cellType}"
+        }
+        
+        // Fit camera to show both markers
+        val builder = LatLngBounds.Builder()
+        builder.include(baseStationPos)
+        builder.include(userPos)
+        
+        try {
+            val bounds = builder.build()
+            val padding = 200 // pixels
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fit camera: ${e.message}")
+        }
+    }
+    
+    private fun updateEkfTrajectory(trajectory: List<Pair<Double, Double>>) {
+        if (!::googleMap.isInitialized) return
+        
+        if (trajectory.isEmpty()) {
+            ekfTrajectoryPolyline?.remove()
+            ekfTrajectoryPolyline = null
+            return
+        }
+        
+        val points = trajectory.map { (lat, lon) -> LatLng(lat, lon) }
+        
+        if (ekfTrajectoryPolyline == null) {
+            ekfTrajectoryPolyline = googleMap.addPolyline(
+                PolylineOptions()
+                    .addAll(points)
+                    .color(Color.BLUE)
+                    .width(5f)
+            )
+        } else {
+            ekfTrajectoryPolyline?.points = points
+        }
+        
+        Log.d(TAG, "EKF trajectory updated: ${points.size} points")
     }
 
     private fun initializeUI() {
@@ -308,6 +432,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             DisplayMode.PINS -> {
                 Log.d(TAG, "Creating pin visualization")
                 createPinMarkers(filteredLogs)
+            }
+            DisplayMode.EKF_TRACKING -> {
+                Log.d(TAG, "EKF tracking mode - displaying real-time tracking")
+                // EKF visualization is handled by observeViewModel
+                // Just ensure existing elements are cleared
             }
         }
         
@@ -649,6 +778,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val debugCount = debugCircles.size
         debugCircles.forEach { it.remove() }
         debugCircles.clear()
+        
+        // Clear EKF elements if not in EKF mode
+        if (currentDisplayMode != DisplayMode.EKF_TRACKING) {
+            ekfBaseStationMarker?.remove()
+            ekfBaseStationMarker = null
+            ekfErrorCircle?.remove()
+            ekfErrorCircle = null
+            ekfUserMarker?.remove()
+            ekfUserMarker = null
+            ekfTrajectoryPolyline?.remove()
+            ekfTrajectoryPolyline = null
+        }
         
         Log.d(TAG, "Cleared: $pinCount pins, heatmap: $hadHeatmap, $circleCount RSSI circles, $debugCount debug circles")
     }
