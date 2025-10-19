@@ -35,7 +35,7 @@ Android API:
 ```kotlin
 val results = BaseStationEstimator.estimateBaseStationPositions(
     cellLogsMap = cellLogs,
-    method = "robust"  // or "wls", "intersection", "centroid"
+    method = "robust"  // or "wls", "accum", "centroid"
 )
 ```
 

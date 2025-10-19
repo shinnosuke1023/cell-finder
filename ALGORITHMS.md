@@ -270,7 +270,7 @@ Potential enhancements:
 
 ### Path Loss Models
 - Rappaport, T. S. (1996). "Wireless Communications: Principles and Practice"
-- 3GPP TR 36.873: "Study on 3D channel model for LTE"
+- 3GPP Technical Specification Group Radio Access Network: Various technical reports on propagation models
 
 ## License
 

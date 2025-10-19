@@ -347,7 +347,7 @@ object BaseStationEstimator {
                 val estimatedPoint = when (method) {
                     "wls" -> wlsTrilateration(circles)
                     "robust" -> robustTrilateration(circles)
-                    "intersection" -> estimateUsingIntersections(
+                    "accum", "intersection" -> estimateUsingIntersections(
                         uniqueLogs, pathLossExponent, refRssiDbm, refDistM, bandwidthM
                     ).let { (lat, lon) ->
                         if (lat != null && lon != null) {
