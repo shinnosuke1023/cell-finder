@@ -264,14 +264,14 @@ def _wls_trilateration(pts, max_iter=20, convergence_threshold=0.1):
     return (x_est, y_est)
 
 
-def _robust_trilateration(pts, outlier_threshold=3.0):
+def _robust_trilateration(pts, outlier_threshold=2.5):
     """ロバストな三辺測量（外れ値除去付き）
     
     RANSAC風のアプローチで外れ値を除去してから推定を行う。
     
     Args:
         pts: [(x, y, r), ...] 観測点の座標と推定距離のリスト
-        outlier_threshold: 外れ値判定の閾値（標準偏差の倍数）
+        outlier_threshold: 外れ値判定の閾値（標準偏差の倍数、既定2.5）
     
     Returns:
         (x, y) 推定位置、または None
@@ -306,16 +306,17 @@ def _robust_trilateration(pts, outlier_threshold=3.0):
     threshold = outlier_threshold * 1.4826 * mad  # 1.4826はMADを標準偏差に変換する係数
     inliers = []
     for i, (xi, yi, ri) in enumerate(pts):
-        if residuals[i] - median < threshold:
+        modified_z = abs(residuals[i] - median) / (1.4826 * mad) if mad > 0 else 0
+        if modified_z < outlier_threshold:
             inliers.append((xi, yi, ri))
     
     # インライアが十分にある場合は再推定
-    if len(inliers) >= 3:
+    if len(inliers) >= 3 and len(inliers) < len(pts):
         result = _wls_trilateration(inliers)
         if result is not None:
             return result
     
-    # インライアが少ない場合は初期推定を返す
+    # インライアが少ない場合、または外れ値がない場合は初期推定を返す
     return (x_est, y_est)
 
 

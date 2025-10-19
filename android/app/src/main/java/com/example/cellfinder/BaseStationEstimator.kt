@@ -213,12 +213,12 @@ object BaseStationEstimator {
      * Uses a RANSAC-like approach to remove outliers before estimation.
      * 
      * @param circles List of (x, y, radius) in meters
-     * @param outlierThreshold Threshold for outlier detection (in multiples of MAD)
+     * @param outlierThreshold Threshold for outlier detection (in multiples of MAD, default 2.5)
      * @return Estimated position (x, y) or null
      */
     private fun robustTrilateration(
         circles: List<Triple<Double, Double, Double>>,
-        outlierThreshold: Double = 3.0
+        outlierThreshold: Double = 2.5
     ): Point? {
         if (circles.size < 3) return null
         
@@ -242,13 +242,13 @@ object BaseStationEstimator {
         if (mad < 1e-6) return initialEst
         
         // Remove outliers using modified Z-score
-        val threshold = outlierThreshold * 1.4826 * mad  // 1.4826 converts MAD to std dev
         val inliers = circles.filterIndexed { index, _ ->
-            residuals[index] - median < threshold
+            val modifiedZ = abs(residuals[index] - median) / (1.4826 * mad)
+            modifiedZ < outlierThreshold
         }
         
-        // Re-estimate with inliers if we have enough
-        return if (inliers.size >= 3) {
+        // Re-estimate with inliers if we have enough and removed some outliers
+        return if (inliers.size >= 3 && inliers.size < circles.size) {
             wlsTrilateration(inliers) ?: initialEst
         } else {
             initialEst
