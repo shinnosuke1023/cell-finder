@@ -23,6 +23,8 @@ class MainActivity : Activity() {
     )
     private val REQ_PERM = 100
     private lateinit var statusView: TextView
+    private lateinit var btnTrackStart: Button
+    private lateinit var btnTrackStop: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.d(TAG, "onCreate() called")
@@ -33,6 +35,8 @@ class MainActivity : Activity() {
         val btnStart = findViewById<Button>(R.id.btnStart)
         val btnStop = findViewById<Button>(R.id.btnStop)
         val btnMap = findViewById<Button>(R.id.btnMap)
+        btnTrackStart = findViewById<Button>(R.id.btnTrackStart)
+        btnTrackStop = findViewById<Button>(R.id.btnTrackStop)
 
         Log.d(TAG, "UI components initialized")
 
@@ -60,6 +64,26 @@ class MainActivity : Activity() {
         btnMap.setOnClickListener {
             Log.d(TAG, "Map button clicked")
             startActivity(Intent(this, MapsActivity::class.java))
+        }
+        
+        btnTrackStart.setOnClickListener {
+            Log.d(TAG, "Track Start button clicked")
+            if (!hasPermissions()) {
+                Log.w(TAG, "Permissions not granted, requesting permissions")
+                ActivityCompat.requestPermissions(this, PERMISSIONS, REQ_PERM)
+            } else {
+                Log.i(TAG, "Permissions granted, starting tracking service")
+                startService(Intent(this, TrackingService::class.java))
+                statusView.text = "Status: EKF tracking started"
+                Log.i(TAG, "TrackingService started successfully")
+            }
+        }
+        
+        btnTrackStop.setOnClickListener {
+            Log.d(TAG, "Track Stop button clicked")
+            stopService(Intent(this, TrackingService::class.java))
+            statusView.text = "Status: EKF tracking stopped"
+            Log.i(TAG, "TrackingService stopped")
         }
 
         Log.d(TAG, "onCreate() completed")
