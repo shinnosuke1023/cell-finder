@@ -176,18 +176,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             ekfUserMarker?.snippet = "RSSI: ${state.rssi} dBm\nCell: ${state.cellType}"
         }
         
-        // Fit camera to show both markers
-        val builder = LatLngBounds.Builder()
-        builder.include(baseStationPos)
-        builder.include(userPos)
-        
-        try {
-            val bounds = builder.build()
-            val padding = 200 // pixels
-            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to fit camera: ${e.message}")
-        }
+        // Don't auto-fit camera to preserve user's view
     }
     
     private fun updateEkfTrajectory(trajectory: List<Pair<Double, Double>>) {
@@ -440,10 +429,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
         
-        // Auto-fit camera if we have data
-        if (filteredLogs.isNotEmpty()) {
-            fitCameraToData(filteredLogs)
-        } else {
+        // Don't auto-fit camera on updates to preserve user's view
+        if (filteredLogs.isEmpty()) {
             Log.w(TAG, "No data to display on map")
             Toast.makeText(this@MapsActivity, "No data available to display", Toast.LENGTH_SHORT).show()
         }

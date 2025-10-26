@@ -132,18 +132,7 @@ class MapFragment : Fragment(), OnMapReadyCallback {
             userMarker?.snippet = "RSSI: ${state.rssi} dBm\nCell: ${state.cellType}"
         }
         
-        // Fit camera to show both markers
-        val builder = LatLngBounds.Builder()
-        builder.include(baseStationPos)
-        builder.include(userPos)
-        
-        try {
-            val bounds = builder.build()
-            val padding = 200 // pixels
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to fit camera: ${e.message}")
-        }
+        // Don't auto-fit camera to preserve user's view
     }
     
     private fun updateTrajectory(trajectory: List<Pair<Double, Double>>) {
