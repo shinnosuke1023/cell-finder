@@ -25,6 +25,12 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+        
+        <service
+            android:name="com.example.cellfinder.TrackingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <activity
             android:name="com.example.cellfinder.MapsActivity"
