@@ -26,13 +26,16 @@ class MapViewModel : ViewModel() {
     private val _isTracking = MutableLiveData<Boolean>(false)
     val isTracking: LiveData<Boolean> = _isTracking
     
+    // Observer reference for proper cleanup
+    private val trackingObserver: androidx.lifecycle.Observer<TrackingState> = androidx.lifecycle.Observer { state ->
+        onTrackingStateUpdate(state)
+    }
+    
     init {
         Log.d(TAG, "MapViewModel initialized")
         
         // Observe tracking service LiveData
-        TrackingService.estimatedPositionLiveData.observeForever { state ->
-            onTrackingStateUpdate(state)
-        }
+        TrackingService.estimatedPositionLiveData.observeForever(trackingObserver)
     }
     
     private fun onTrackingStateUpdate(state: TrackingState?) {
@@ -88,6 +91,8 @@ class MapViewModel : ViewModel() {
     
     override fun onCleared() {
         super.onCleared()
+        // Remove observer to prevent memory leak
+        TrackingService.estimatedPositionLiveData.removeObserver(trackingObserver)
         Log.d(TAG, "MapViewModel cleared")
     }
 }

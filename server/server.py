@@ -1,17 +1,37 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 import sqlite3
 import time
 import math
 
 app = Flask(__name__)
 
-# データベース初期化（毎回リセット）
-conn = sqlite3.connect("cells.db", check_same_thread=False)
-c = conn.cursor()
-c.execute("DROP TABLE IF EXISTS logs")
-c.execute('''CREATE TABLE logs
-             (timestamp INTEGER, lat REAL, lon REAL, type TEXT, rssi INTEGER, cell_id TEXT)''')
-conn.commit()
+DATABASE = "cells.db"
+
+def get_db():
+    """Get a database connection for the current request context."""
+    if 'db' not in g:
+        g.db = sqlite3.connect(DATABASE, check_same_thread=False)
+    return g.db
+
+@app.teardown_appcontext
+def close_db(exception):
+    """Close database connection at the end of request."""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    """Initialize the database schema."""
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS logs")
+    c.execute('''CREATE TABLE logs
+                 (timestamp INTEGER, lat REAL, lon REAL, type TEXT, rssi INTEGER, cell_id TEXT)''')
+    conn.commit()
+    conn.close()
+
+# Initialize database on startup
+init_db()
 
 @app.route('/log', methods=['POST'])
 def log():
@@ -28,7 +48,8 @@ def log():
     lat = data.get("lat")
     lon = data.get("lon")
     cells = data.get("cells", [])
-    c = conn.cursor()
+    db = get_db()
+    c = db.cursor()
     for cell in cells:
         c.execute("INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?)",
                   (timestamp, lat, lon,
@@ -36,14 +57,15 @@ def log():
                    cell.get("rssi"),
                    # None はそのまま渡し、DB では NULL になる
                    cell.get("cell_id")))
-    conn.commit()
+    db.commit()
     return jsonify({"status": "ok"})
 
 
 @app.route('/map_data')
 def map_data():
     """通常の観測ログを返す（地図表示用）"""
-    c = conn.cursor()
+    db = get_db()
+    c = db.cursor()
     cell_id_filter = request.args.get('cell_id', None)
     one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
     
@@ -72,7 +94,8 @@ def map_data():
 @app.route('/heatmap_data')
 def heatmap_data():
     """ヒートマップ用のデータを返す"""
-    c = conn.cursor()
+    db = get_db()
+    c = db.cursor()
     cell_id_filter = request.args.get('cell_id', None)
     one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
     
@@ -101,7 +124,8 @@ def heatmap_data():
 @app.route('/cell_ids')
 def get_cell_ids():
     """利用可能なセルIDのリストを返す"""
-    c = conn.cursor()
+    db = get_db()
+    c = db.cursor()
     one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
     c.execute("SELECT DISTINCT cell_id FROM logs WHERE timestamp > ? AND cell_id IS NOT NULL ORDER BY cell_id", (one_hour_ago_ms,))
     rows = c.fetchall()
@@ -184,7 +208,8 @@ def cell_map():
     重複排除:
       - 同一 (cell_id, type, lat, lon) のレコードが複数ある場合は、最新 (timestamp が最大) のみ利用。
     """
-    c = conn.cursor()
+    db = get_db()
+    c = db.cursor()
 
     # パラメータ取得
     ple = request.args.get('ple', default=2.0, type=float)

@@ -32,6 +32,9 @@ class TrackingService : Service() {
     private var lastUtmZone: Int = 54  // Default for Tokyo
     private var lastHemisphere: Char = 'N'
     
+    // Track number of EKF measurements
+    private var measurementCount: Int = 0
+    
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "TrackingService onCreate()")
@@ -113,6 +116,7 @@ class TrackingService : Service() {
         
         // Perform EKF step
         ekfEngine.step(userUtm, cellInfo.rssi.toDouble())
+        measurementCount++
         
         // Get estimated position
         val estimatedUtm = ekfEngine.getEstimatedPositionUtm()
@@ -141,11 +145,15 @@ class TrackingService : Service() {
                 cellType = cellInfo.type,
                 pathLossExponent = eta,
                 referencePower = p0,
-                measurementCount = 0  // Could track this if needed
+                measurementCount = measurementCount
             )
             
-            Log.d(TAG, "Estimated position: ($estLat, $estLon), error radius: $errorRadius m")
+            Log.d(TAG, "Estimated position: ($estLat, $estLon), error radius: $errorRadius m, measurements: $measurementCount")
             Log.d(TAG, "Path loss parameters: P0=$p0 dBm, eta=$eta")
+            
+            // Update LiveData
+            estimatedPositionLiveData.postValue(state)
+        }
             
             // Update LiveData
             estimatedPositionLiveData.postValue(state)

@@ -32,6 +32,10 @@ class EKFEngine {
     
     private var initialized: Boolean = false
     
+    // Store the UTM zone and hemisphere from initialization
+    private var utmZone: Int = 54  // Default zone for Tokyo area
+    private var utmHemisphere: Char = 'N'  // Default northern hemisphere
+    
     /**
      * Initialize the EKF with an initial position guess.
      * 
@@ -39,6 +43,10 @@ class EKFEngine {
      */
     fun initialize(initialUtmLocation: UtmCoord) {
         Log.d(TAG, "Initializing EKF at UTM: x=${initialUtmLocation.x}, y=${initialUtmLocation.y}")
+        
+        // Store UTM zone and hemisphere for later coordinate conversion
+        utmZone = initialUtmLocation.zone
+        utmHemisphere = initialUtmLocation.hemisphere
         
         // Initialize state vector
         x.set(0, 0, initialUtmLocation.x)  // x_fbs
@@ -58,7 +66,7 @@ class EKFEngine {
         initialized = true
         
         Log.d(TAG, "EKF initialized: x_fbs=${x.get(0,0)}, y_fbs=${x.get(1,0)}, " +
-                "P0=${x.get(2,0)}, eta=${x.get(3,0)}")
+                "P0=${x.get(2,0)}, eta=${x.get(3,0)}, zone=$utmZone, hemisphere=$utmHemisphere")
     }
     
     /**
@@ -167,14 +175,12 @@ class EKFEngine {
     fun getEstimatedPositionUtm(): UtmCoord? {
         if (!initialized) return null
         
-        // We need to use the same zone and hemisphere as the initial location
-        // For simplicity, we'll reconstruct with a default zone
-        // In a real application, you'd need to track the original zone
+        // Use the zone and hemisphere stored during initialization
         return UtmCoord(
             x = x.get(0, 0),
             y = x.get(1, 0),
-            zone = 54,  // Default zone for Tokyo area
-            hemisphere = 'N'
+            zone = utmZone,
+            hemisphere = utmHemisphere
         )
     }
     
