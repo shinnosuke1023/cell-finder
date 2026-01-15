@@ -154,10 +154,6 @@ class TrackingService : Service() {
             // Update LiveData
             estimatedPositionLiveData.postValue(state)
         }
-            
-            // Update LiveData
-            estimatedPositionLiveData.postValue(state)
-        }
     }
     
     private fun buildNotification(): Notification {
