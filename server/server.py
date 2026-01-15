@@ -10,7 +10,7 @@ DATABASE = "cells.db"
 def get_db():
     """Get a database connection for the current request context."""
     if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE, check_same_thread=False)
+        g.db = sqlite3.connect(DATABASE)
     return g.db
 
 @app.teardown_appcontext

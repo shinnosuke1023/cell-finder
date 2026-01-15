@@ -41,6 +41,9 @@ class TrackingService : Service() {
         locationProvider = LocationProvider(this)
         cellInfoProvider = CellInfoProvider(this)
         
+        // Reset measurement count to ensure synchronization with new EKFEngine
+        measurementCount = 0
+        
         // Create coroutine scope
         serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         
@@ -66,8 +69,8 @@ class TrackingService : Service() {
         // Cancel any existing job
         trackingJob?.cancel()
         
-        // Reset measurement count when starting new tracking session
-        measurementCount = 0
+        // Note: measurementCount is reset in onCreate() when EKFEngine is initialized
+        // to ensure synchronization between the counter and EKF state
         
         // Start new tracking job
         trackingJob = serviceScope?.launch {

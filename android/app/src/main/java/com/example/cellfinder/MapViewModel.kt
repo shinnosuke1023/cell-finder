@@ -27,7 +27,7 @@ class MapViewModel : ViewModel() {
     val isTracking: LiveData<Boolean> = _isTracking
     
     // Observer reference for proper cleanup
-    private val trackingObserver: androidx.lifecycle.Observer<TrackingState> = androidx.lifecycle.Observer { state ->
+    private val trackingObserver: androidx.lifecycle.Observer<TrackingState?> = androidx.lifecycle.Observer { state ->
         onTrackingStateUpdate(state)
     }
     
