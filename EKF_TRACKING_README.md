@@ -96,11 +96,13 @@ P = (I - K·H)·P_pred
 
 ### Jacobian Matrix
 ```
-H = [10η/(ln(10)·d²)·(x_fbs - user_x),
-     10η/(ln(10)·d²)·(y_fbs - user_y),
+H = [-10η/(ln(10)·d²)·(x_fbs - user_x),
+     -10η/(ln(10)·d²)·(y_fbs - user_y),
      1,
      -10·log₁₀(d)]
 ```
+
+**Note**: The first two elements have negative signs, which is mathematically correct for proper EKF convergence.
 
 ## Architecture
 
