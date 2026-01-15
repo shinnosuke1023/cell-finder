@@ -29,8 +29,8 @@ class TrackingService : Service() {
     private var serviceScope: CoroutineScope? = null
     private var trackingJob: Job? = null
     
-    private var lastUtmZone: Int = 54  // Default for Tokyo
-    private var lastHemisphere: Char = 'N'
+    // Track number of EKF measurements
+    private var measurementCount: Int = 0
     
     override fun onCreate() {
         super.onCreate()
@@ -40,6 +40,9 @@ class TrackingService : Service() {
         ekfEngine = EKFEngine()
         locationProvider = LocationProvider(this)
         cellInfoProvider = CellInfoProvider(this)
+        
+        // Reset measurement count to ensure synchronization with new EKFEngine
+        measurementCount = 0
         
         // Create coroutine scope
         serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -65,6 +68,9 @@ class TrackingService : Service() {
         
         // Cancel any existing job
         trackingJob?.cancel()
+        
+        // Note: measurementCount is reset in onCreate() when EKFEngine is initialized
+        // to ensure synchronization between the counter and EKF state
         
         // Start new tracking job
         trackingJob = serviceScope?.launch {
@@ -101,10 +107,6 @@ class TrackingService : Service() {
         // Convert location to UTM
         val userUtm = UtmConverter.latLonToUtm(location.latitude, location.longitude)
         
-        // Store zone and hemisphere for later conversion back
-        lastUtmZone = userUtm.zone
-        lastHemisphere = userUtm.hemisphere
-        
         // Initialize EKF on first measurement
         if (!ekfEngine.isInitialized()) {
             Log.i(TAG, "Initializing EKF with first measurement")
@@ -113,6 +115,7 @@ class TrackingService : Service() {
         
         // Perform EKF step
         ekfEngine.step(userUtm, cellInfo.rssi.toDouble())
+        measurementCount++
         
         // Get estimated position
         val estimatedUtm = ekfEngine.getEstimatedPositionUtm()
@@ -120,14 +123,8 @@ class TrackingService : Service() {
         val (p0, eta) = ekfEngine.getPathLossParameters()
         
         if (estimatedUtm != null) {
-            // Convert back to lat/lon
-            val estimatedUtmWithZone = UtmCoord(
-                estimatedUtm.x,
-                estimatedUtm.y,
-                lastUtmZone,
-                lastHemisphere
-            )
-            val (estLat, estLon) = UtmConverter.utmToLatLon(estimatedUtmWithZone)
+            // Convert back to lat/lon (estimatedUtm already contains correct zone/hemisphere)
+            val (estLat, estLon) = UtmConverter.utmToLatLon(estimatedUtm)
             
             // Create tracking state
             val state = TrackingState(
@@ -141,10 +138,10 @@ class TrackingService : Service() {
                 cellType = cellInfo.type,
                 pathLossExponent = eta,
                 referencePower = p0,
-                measurementCount = 0  // Could track this if needed
+                measurementCount = measurementCount
             )
             
-            Log.d(TAG, "Estimated position: ($estLat, $estLon), error radius: $errorRadius m")
+            Log.d(TAG, "Estimated position: ($estLat, $estLon), error radius: $errorRadius m, measurements: $measurementCount")
             Log.d(TAG, "Path loss parameters: P0=$p0 dBm, eta=$eta")
             
             // Update LiveData
