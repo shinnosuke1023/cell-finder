@@ -29,9 +29,6 @@ class TrackingService : Service() {
     private var serviceScope: CoroutineScope? = null
     private var trackingJob: Job? = null
     
-    private var lastUtmZone: Int = 54  // Default for Tokyo
-    private var lastHemisphere: Char = 'N'
-    
     // Track number of EKF measurements
     private var measurementCount: Int = 0
     
@@ -69,6 +66,9 @@ class TrackingService : Service() {
         // Cancel any existing job
         trackingJob?.cancel()
         
+        // Reset measurement count when starting new tracking session
+        measurementCount = 0
+        
         // Start new tracking job
         trackingJob = serviceScope?.launch {
             while (isActive) {
@@ -104,10 +104,6 @@ class TrackingService : Service() {
         // Convert location to UTM
         val userUtm = UtmConverter.latLonToUtm(location.latitude, location.longitude)
         
-        // Store zone and hemisphere for later conversion back
-        lastUtmZone = userUtm.zone
-        lastHemisphere = userUtm.hemisphere
-        
         // Initialize EKF on first measurement
         if (!ekfEngine.isInitialized()) {
             Log.i(TAG, "Initializing EKF with first measurement")
@@ -124,14 +120,8 @@ class TrackingService : Service() {
         val (p0, eta) = ekfEngine.getPathLossParameters()
         
         if (estimatedUtm != null) {
-            // Convert back to lat/lon
-            val estimatedUtmWithZone = UtmCoord(
-                estimatedUtm.x,
-                estimatedUtm.y,
-                lastUtmZone,
-                lastHemisphere
-            )
-            val (estLat, estLon) = UtmConverter.utmToLatLon(estimatedUtmWithZone)
+            // Convert back to lat/lon (estimatedUtm already contains correct zone/hemisphere)
+            val (estLat, estLon) = UtmConverter.utmToLatLon(estimatedUtm)
             
             // Create tracking state
             val state = TrackingState(
