@@ -91,16 +91,13 @@ Therefore:
           = -10η(x_fbs - x_user) / (d²·ln(10))
 ```
 
-Or equivalently:
-```
-∂h/∂x_fbs = (10η)/(ln(10)·d²) · (x_fbs - x_user)
-```
+**Note**: The negative sign must be preserved for correct convergence.
 
 #### (2) ∂h/∂y_fbs
 
 By symmetry:
 ```
-∂h/∂y_fbs = (10η)/(ln(10)·d²) · (y_fbs - y_user)
+∂h/∂y_fbs = -10η(y_fbs - y_user) / (d²·ln(10))
 ```
 
 #### (3) ∂h/∂P₀
@@ -120,11 +117,13 @@ Trivially:
 ### Complete Jacobian
 
 ```
-H = [(10η)/(ln(10)·d²)·(x_fbs - x_user),
-     (10η)/(ln(10)·d²)·(y_fbs - y_user),
+H = [-10η/(ln(10)·d²)·(x_fbs - x_user),
+     -10η/(ln(10)·d²)·(y_fbs - y_user),
      1,
      -10·log₁₀(d)]
 ```
+
+**Important**: The first two elements have negative signs, which is mathematically correct and necessary for proper convergence.
 
 ## 4. Kalman Gain Calculation
 

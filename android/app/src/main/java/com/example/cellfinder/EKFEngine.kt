@@ -113,14 +113,18 @@ class EKFEngine {
         // ===== CALCULATE JACOBIAN MATRIX H (1x4) =====
         // H = [∂h/∂x_fbs, ∂h/∂y_fbs, ∂h/∂P0, ∂h/∂eta]
         // where h(x) = P0 - 10 * eta * log10(d)
+        // 
+        // Mathematical derivation:
+        // ∂h/∂x_fbs = -10η(x_fbs - x_user)/(d²·ln(10))
+        // Note: The negative sign is crucial for correct convergence
         
         val d2 = d_safe * d_safe
         val ln10 = ln(10.0)
-        val common_term = (10.0 * eta) / (ln10 * d2)
+        val common_term = -(10.0 * eta) / (ln10 * d2)  // Negative sign is mathematically correct
         
         val H = SimpleMatrix(1, 4)
-        H.set(0, 0, common_term * dx)        // ∂h/∂x_fbs
-        H.set(0, 1, common_term * dy)        // ∂h/∂y_fbs
+        H.set(0, 0, common_term * dx)        // ∂h/∂x_fbs (negative coefficient)
+        H.set(0, 1, common_term * dy)        // ∂h/∂y_fbs (negative coefficient)
         H.set(0, 2, 1.0)                     // ∂h/∂P0
         H.set(0, 3, -10.0 * log10(d_safe))  // ∂h/∂eta
         

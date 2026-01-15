@@ -223,18 +223,14 @@ d = √[(x_fbs - x_user)² + (y_fbs - y_user)²]
           = -10η(x_fbs - x_user) / (d²·ln(10))
 ```
 
-符号を反転して：
-
-```
-∂h/∂x_fbs = 10η(x_fbs - x_user) / (ln(10)·d²)
-```
+**注意**: 負の符号を保持することが重要です。
 
 ### (2) ∂h/∂y_fbs の導出
 
 対称性により：
 
 ```
-∂h/∂y_fbs = 10η(y_fbs - y_user) / (ln(10)·d²)
+∂h/∂y_fbs = -10η(y_fbs - y_user) / (d²·ln(10))
 ```
 
 ### (3) ∂h/∂P₀ の導出
@@ -255,13 +251,15 @@ d = √[(x_fbs - x_user)² + (y_fbs - y_user)²]
 ### 完全なヤコビ行列
 
 ```
-H = [10η/(ln(10)·d²)·(x_fbs - x_user),
-     10η/(ln(10)·d²)·(y_fbs - y_user),
+H = [-10η/(ln(10)·d²)·(x_fbs - x_user),
+     -10η/(ln(10)·d²)·(y_fbs - y_user),
      1,
      -10·log₁₀(d)]
 ```
 
 この行列は1×4の行ベクトルです。
+
+**重要**: 最初の2つの要素は負の符号を持ちます。これは数学的に正しい導出結果です。
 
 ---
 
@@ -309,7 +307,7 @@ EKFの1ステップを実行：
 
 4. **ヤコビ行列**
    ```kotlin
-   val common_term = (10.0 * eta) / (ln(10.0) * d_safe * d_safe)
+   val common_term = -(10.0 * eta) / (ln(10.0) * d_safe * d_safe)
    H.set(0, 0, common_term * dx)
    H.set(0, 1, common_term * dy)
    H.set(0, 2, 1.0)
