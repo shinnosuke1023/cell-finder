@@ -11,4 +11,9 @@
     <string name="btn_show_map">Show Map</string>
     <string name="btn_start_tracking">Start EKF Tracking</string>
     <string name="btn_stop_tracking">Stop EKF Tracking</string>
+    <string name="gsm_alert_title">⚠ GSM Connection Detected</string>
+    <string name="gsm_alert_message">Your device is connected to a GSM (2G) base station. This may indicate a potential IMSI catcher (fake base station) nearby.</string>
+    <string name="gsm_alert_ok">OK</string>
+    <string name="gsm_notification_title">⚠ GSM Connection Detected</string>
+    <string name="gsm_notification_text">A GSM (2G) base station has been detected. Tap for details.</string>
 </resources>

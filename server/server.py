@@ -2,6 +2,7 @@ import logging
 import math
 import sqlite3
 import time
+from collections import deque
 
 from flask import Flask, g, jsonify, render_template, request
 from flask_cors import CORS
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
+
+# In-memory store for recent GSM alerts (max 100 entries, last 1 hour)
+_gsm_alerts = deque(maxlen=100)
 
 
 @app.teardown_appcontext
@@ -71,7 +75,37 @@ def log():
                    cell.get("cell_id")))
     db.commit()
     logger.debug("Logged %d cell records", len(cells))
+
+    # Detect GSM cells and raise alert
+    gsm_cells = [c for c in cells if c.get("type") == "GSM"]
+    if gsm_cells:
+        alert = {
+            "timestamp": timestamp,
+            "lat": lat,
+            "lon": lon,
+            "gsm_cells": [
+                {"cell_id": c.get("cell_id"), "rssi": c.get("rssi")}
+                for c in gsm_cells
+            ],
+        }
+        _gsm_alerts.append(alert)
+        logger.warning(
+            "GSM ALERT: %d GSM cell(s) detected at lat=%s, lon=%s, cells=%s",
+            len(gsm_cells),
+            lat,
+            lon,
+            [c.get("cell_id") for c in gsm_cells],
+        )
+
     return jsonify({"status": "ok"})
+
+
+@app.route('/alerts')
+def alerts():
+    """Return recent GSM alerts (last 1 hour)."""
+    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    recent = [a for a in _gsm_alerts if a["timestamp"] > one_hour_ago_ms]
+    return jsonify(recent)
 
 
 @app.route('/map_data')
