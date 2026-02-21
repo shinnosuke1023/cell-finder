@@ -32,7 +32,9 @@
         <option value="pins">Pins</option>
       </select>
 
-      <button onclick="updateMap()">Refresh</button>
+      <button onclick="updateMap(true)">Refresh</button>
+
+      <label><input type="checkbox" id="debugToggle" checked onchange="toggleDebug()"> Debug Circles</label>
     </div>
     <div id="status">Loading…</div>
     <div id="map"></div>
@@ -123,7 +125,16 @@
         .catch(function(e) { console.error('cell_ids error', e); });
     }
 
-    function updateMap() {
+    function toggleDebug() {
+      var show = document.getElementById('debugToggle').checked;
+      if (show) {
+        map.addLayer(debugLayer);
+      } else {
+        map.removeLayer(debugLayer);
+      }
+    }
+
+    function updateMap(shouldFit) {
       var mode = document.getElementById('displayMode').value;
       var cellId = document.getElementById('cellIdFilter').value;
       statusEl.textContent = 'Loading…';
@@ -172,7 +183,7 @@
               });
             }
           });
-          fitIfNeeded(bounds);
+          if (shouldFit) fitIfNeeded(bounds);
         })
         .catch(function(e) { console.error('cell_map error', e); });
 
@@ -204,7 +215,7 @@
             });
             statusEl.textContent = 'RSSI Circles: ' + bucketed.length + ' points (from ' + data.length + ' records)' +
               (cellId ? ' (Cell: ' + cellId + ')' : '');
-            fitIfNeeded(bounds);
+            if (shouldFit) fitIfNeeded(bounds);
           })
           .catch(function(e) {
             statusEl.textContent = 'Error loading RSSI circles: ' + e.message;
@@ -238,7 +249,7 @@
             });
             statusEl.textContent = 'Heatmap: ' + bucketed.length + ' points (from ' + data.length + ' records)' +
               (cellId ? ' (Cell: ' + cellId + ')' : '');
-            fitIfNeeded(bounds);
+            if (shouldFit) fitIfNeeded(bounds);
           })
           .catch(function(e) {
             statusEl.textContent = 'Error loading heatmap: ' + e.message;
@@ -269,7 +280,7 @@
               bounds.push([row.lat, row.lon]);
             });
             statusEl.textContent = 'Pins: ' + data.length + ' points' + (cellId ? ' (Cell: ' + cellId + ')' : '');
-            fitIfNeeded(bounds);
+            if (shouldFit) fitIfNeeded(bounds);
           })
           .catch(function(e) {
             statusEl.textContent = 'Error loading pins: ' + e.message;
@@ -286,10 +297,10 @@
 
     // Initialise
     loadCellIds();
-    updateMap();
+    updateMap(true);
     setInterval(function() {
       loadCellIds();
-      updateMap();
+      updateMap(false);
     }, 10000);
   </script>
 </body>
