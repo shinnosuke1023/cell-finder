@@ -97,10 +97,10 @@ def alerts():
         (one_hour_ago_ms,),
     ).fetchall()
 
-    # Group consecutive GSM records by timestamp
+    # Group GSM records by (timestamp, lat, lon)
     grouped = {}
     for ts, lat, lon, rssi, cell_id in rows:
-        key = ts
+        key = (ts, lat, lon)
         if key not in grouped:
             grouped[key] = {"timestamp": ts, "lat": lat, "lon": lon, "gsm_cells": []}
         grouped[key]["gsm_cells"].append({"cell_id": cell_id, "rssi": rssi})
