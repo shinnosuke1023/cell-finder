@@ -1,41 +1,56 @@
-from flask import Flask, request, jsonify, g
+import logging
+import math
 import sqlite3
 import time
-import math
+
+from flask import Flask, g, jsonify, render_template, request
+from flask_cors import CORS
+
+from db import ARCHIVE_DB, close_db, get_db, init_db, start_archive_timer
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)
 
-DATABASE = "cells.db"
-
-def get_db():
-    """Get a database connection for the current request context."""
-    if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE)
-    return g.db
 
 @app.teardown_appcontext
-def close_db(exception):
-    """Close database connection at the end of request."""
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
+def _close_db(exception):
+    """Close the per-thread DB connection at end of request."""
+    close_db()
 
-def init_db():
-    """Initialize the database schema."""
-    conn = sqlite3.connect(DATABASE)
-    c = conn.cursor()
-    c.execute("DROP TABLE IF EXISTS logs")
-    c.execute('''CREATE TABLE logs
-                 (timestamp INTEGER, lat REAL, lon REAL, type TEXT, rssi INTEGER, cell_id TEXT)''')
-    conn.commit()
-    conn.close()
 
-# Initialize database on startup
+# ── initialisation ────────────────────────────────────────────────────────────
 init_db()
+start_archive_timer()
 
 @app.route('/log', methods=['POST'])
 def log():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "invalid or missing JSON body"}), 400
+
+    # lat / lon validation
+    lat = data.get("lat")
+    lon = data.get("lon")
+    try:
+        if lat is not None and not (-90.0 <= float(lat) <= 90.0):
+            return jsonify({"error": "lat out of range [-90, 90]"}), 400
+        if lon is not None and not (-180.0 <= float(lon) <= 180.0):
+            return jsonify({"error": "lon out of range [-180, 180]"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "lat and lon must be numeric"}), 400
+
+    cells = data.get("cells", [])
+    if not isinstance(cells, list):
+        return jsonify({"error": "cells must be a list"}), 400
+    if len(cells) > 200:
+        return jsonify({"error": "cells list exceeds maximum length of 200"}), 400
+
     timestamp = data.get("timestamp")
     # タイムスタンプが秒の場合はミリ秒に変換、未指定なら現在時刻（ms）
     if timestamp is None:
@@ -45,9 +60,6 @@ def log():
     else:
         timestamp = int(timestamp)
 
-    lat = data.get("lat")
-    lon = data.get("lon")
-    cells = data.get("cells", [])
     db = get_db()
     c = db.cursor()
     for cell in cells:
@@ -58,6 +70,7 @@ def log():
                    # None はそのまま渡し、DB では NULL になる
                    cell.get("cell_id")))
     db.commit()
+    logger.debug("Logged %d cell records", len(cells))
     return jsonify({"status": "ok"})
 
 
@@ -199,7 +212,7 @@ def cell_map():
     """セルごとに「受信電力→距離」の円の交点を投票して基地局位置を推定して返す。
     クエリ引数:
       - ple: パス損失指数 n（既定 2.0）
-      - window_sec: この秒数以内のログのみを対象（省略時は全期間）
+      - window_sec: この秒数以内のログのみを対象（省略時は 3600 秒＝1時間）
       - ref_rssi: 参照距離 ref_dist[m] における RSSI[dBm]（既定 -40）
       - ref_dist: 参照距離[m]（既定 1.0）
       - bandwidth_m: 交点クラスタリング半径[m]（既定 150）
@@ -213,7 +226,7 @@ def cell_map():
 
     # パラメータ取得
     ple = request.args.get('ple', default=2.0, type=float)
-    window_sec = request.args.get('window_sec', default=None, type=int)
+    window_sec = request.args.get('window_sec', default=3600, type=int)
     ref_rssi = request.args.get('ref_rssi', default=-40.0, type=float)
     ref_dist = request.args.get('ref_dist', default=1.0, type=float)
     bandwidth_m = request.args.get('bandwidth_m', default=150.0, type=float)
@@ -361,224 +374,87 @@ def cell_map():
     return jsonify(result)
 
 
+@app.route('/history')
+def history():
+    """アーカイブ層から過去データを検索する。
+    クエリ引数:
+      - cell_id: セルIDでフィルタ（省略可）
+      - hours: 過去何時間分を返すか（デフォルト 24）
+      - limit: 最大返却行数（デフォルト 1000、最大 10000）
+    """
+    cell_id_filter = request.args.get('cell_id', None)
+    hours = request.args.get('hours', default=24, type=int)
+    limit = min(request.args.get('limit', default=1000, type=int), 10000)
+
+    cutoff_ms = int(time.time() * 1000) - hours * 3600 * 1000
+    params = [cutoff_ms]
+    query = (
+        "SELECT timestamp, lat, lon, type, rssi, cell_id "
+        "FROM logs WHERE timestamp > ?"
+    )
+    if cell_id_filter:
+        query += " AND cell_id = ?"
+        params.append(cell_id_filter)
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+
+    try:
+        conn = sqlite3.connect(ARCHIVE_DB)
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+    except Exception:
+        logger.exception("history query failed")
+        return jsonify({"error": "database error"}), 500
+
+    result = [
+        {"timestamp": r[0], "lat": r[1], "lon": r[2],
+         "type": r[3], "rssi": r[4], "cell_id": r[5]}
+        for r in rows
+    ]
+    return jsonify(result)
+
+
+@app.route('/stats')
+def stats():
+    """リアルタイム層とアーカイブ層のレコード数を返す。"""
+    db = get_db()
+    realtime_count = db.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+
+    try:
+        conn = sqlite3.connect(ARCHIVE_DB)
+        archive_count = conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
+        conn.close()
+    except Exception:
+        archive_count = None
+
+    return jsonify({
+        "realtime_count": realtime_count,
+        "archive_count": archive_count,
+    })
+
+
+# ── global error handlers ─────────────────────────────────────────────────────
+
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify({"error": "bad request", "message": str(e)}), 400
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "not found", "message": str(e)}), 404
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.exception("Unhandled exception")
+    return jsonify({"error": "internal server error"}), 500
+
+
 @app.route('/map')
 def map_page():
     """Leafletで地図を表示するページ"""
-    return """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Cell Logger Map</title>
-  <style>
-    #map { height: 80vh; width: 100%; background: #f0f0f0; position: relative; }
-    #controls { margin: 10px 0; }
-    .filter-control { margin: 0 10px 10px 0; display: inline-block; }
-    .filter-control label { margin-right: 5px; }
-    .filter-control select, .filter-control input { padding: 5px; }
-    #status { margin: 10px 0; padding: 10px; background: #e8f4f8; border: 1px solid #bee5eb; }
-    .data-point { position: absolute; width: 10px; height: 10px; border-radius: 50%; z-index: 1000; cursor: pointer; }
-    .heatmap-point { opacity: 0.7; }
-    .pin-point { background: blue; }
-    .base-station { background: red; width: 15px; height: 15px; }
-  </style>
-</head>
-<body>
-  <h3>Cell Logger Map - Heatmap View</h3>
-  <div id="controls">
-    <div class="filter-control">
-      <label for="cellIdFilter">Cell ID Filter:</label>
-      <select id="cellIdFilter">
-        <option value="">All Cell IDs</option>
-      </select>
-    </div>
-    <div class="filter-control">
-      <label for="displayMode">Display Mode:</label>
-      <select id="displayMode">
-        <option value="heatmap">Heatmap</option>
-        <option value="pins">Pins (Original)</option>
-      </select>
-    </div>
-    <div class="filter-control">
-      <button onclick="updateMap()">Refresh</button>
-    </div>
-  </div>
-  <div id="status">Loading map data...</div>
-  <div id="map">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
-      <p>Heatmap Visualization</p>
-      <p id="mapInfo">Loading data...</p>
-    </div>
-  </div>
-  
-  <!-- Fallback implementation without external dependencies -->
-  <script>
-    var mapElement = document.getElementById('map');
-    var statusElement = document.getElementById('status');
-    var currentData = [];
-    var currentMode = 'heatmap';
-    
-    function clearMap() {
-      var points = mapElement.querySelectorAll('.data-point');
-      points.forEach(function(p) { p.remove(); });
-    }
-    
-    function getColorFromIntensity(intensity) {
-      // Convert intensity (0-1) to color
-      if (intensity > 0.8) return '#ff0000'; // red
-      if (intensity > 0.6) return '#ff8000'; // orange  
-      if (intensity > 0.4) return '#ffff00'; // yellow
-      if (intensity > 0.2) return '#80ff00'; // yellow-green
-      return '#0080ff'; // blue
-    }
-    
-    function createDataPoint(lat, lon, intensity, info, isBaseStation) {
-      var point = document.createElement('div');
-      point.className = 'data-point ' + (currentMode === 'heatmap' ? 'heatmap-point' : 'pin-point');
-      if (isBaseStation) point.className += ' base-station';
-      
-      // Simple positioning (would need proper map projection in real implementation)
-      var x = ((lon - 135.0) * 10000 + 50) + '%';
-      var y = ((35.0 - lat) * 10000 + 50) + '%';
-      point.style.left = x;
-      point.style.top = y;
-      
-      if (currentMode === 'heatmap' && !isBaseStation) {
-        point.style.background = getColorFromIntensity(intensity);
-        point.style.width = (intensity * 20 + 5) + 'px';
-        point.style.height = (intensity * 20 + 5) + 'px';
-        point.style.opacity = intensity;
-      }
-      
-      point.title = info;
-      point.onclick = function() { alert(info); };
-      mapElement.appendChild(point);
-    }
-
-    function loadCellIds() {
-      fetch('/cell_ids')
-        .then(res => res.json())
-        .then(cellIds => {
-          var select = document.getElementById('cellIdFilter');
-          // Clear existing options except "All"
-          while (select.children.length > 1) {
-            select.removeChild(select.lastChild);
-          }
-          // Add cell ID options
-          cellIds.forEach(cellId => {
-            var option = document.createElement('option');
-            option.value = cellId;
-            option.textContent = cellId;
-            select.appendChild(option);
-          });
-          statusElement.innerHTML = 'Found ' + cellIds.length + ' cell IDs: ' + cellIds.join(', ');
-        })
-        .catch(err => {
-          console.error('Failed to load cell IDs:', err);
-          statusElement.innerHTML = 'Error loading cell IDs: ' + err.message;
-        });
-    }
-
-    function updateMap() {
-      clearMap();
-      currentMode = document.getElementById('displayMode').value;
-      var cellIdFilter = document.getElementById('cellIdFilter').value;
-      
-      statusElement.innerHTML = 'Loading data for mode: ' + currentMode + 
-        (cellIdFilter ? ' (Cell ID: ' + cellIdFilter + ')' : ' (All cells)');
-      
-      if (currentMode === 'heatmap') {
-        updateHeatmap(cellIdFilter);
-      } else {
-        updatePins(cellIdFilter);
-      }
-      
-      // Always show estimated base stations
-      updateBaseStations();
-    }
-    
-    function updateHeatmap(cellIdFilter) {
-      var url = '/heatmap_data';
-      if (cellIdFilter) {
-        url += '?cell_id=' + encodeURIComponent(cellIdFilter);
-      }
-      
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById('mapInfo').innerHTML = 
-            'Heatmap: ' + data.length + ' data points' + 
-            (cellIdFilter ? ' for Cell ID: ' + cellIdFilter : '');
-          
-          data.forEach(function(point) {
-            var lat = point[0];
-            var lon = point[1]; 
-            var intensity = point[2];
-            var info = 'Heatmap Point\\nLat: ' + lat + '\\nLon: ' + lon + '\\nIntensity: ' + intensity.toFixed(2);
-            createDataPoint(lat, lon, intensity, info, false);
-          });
-          
-          statusElement.innerHTML = 'Heatmap loaded: ' + data.length + ' points';
-        })
-        .catch(err => {
-          console.error('Failed to load heatmap data:', err);
-          statusElement.innerHTML = 'Error loading heatmap: ' + err.message;
-        });
-    }
-    
-    function updatePins(cellIdFilter) {
-      var url = '/map_data';
-      if (cellIdFilter) {
-        url += '?cell_id=' + encodeURIComponent(cellIdFilter);
-      }
-      
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById('mapInfo').innerHTML = 
-            'Pins: ' + data.length + ' data points' + 
-            (cellIdFilter ? ' for Cell ID: ' + cellIdFilter : '');
-          
-          data.forEach(function(log) {
-            if (log.lat != null && log.lon != null) {
-              var info = 'Pin\\nType: ' + log.type + '\\nRSSI: ' + log.rssi + '\\nCell ID: ' + log.cell_id;
-              createDataPoint(log.lat, log.lon, 0.5, info, false);
-            }
-          });
-          
-          statusElement.innerHTML = 'Pins loaded: ' + data.length + ' points';
-        })
-        .catch(err => {
-          console.error('Failed to load pin data:', err);
-          statusElement.innerHTML = 'Error loading pins: ' + err.message;
-        });
-    }
-    
-    function updateBaseStations() {
-      fetch('/cell_map?debug=1')
-        .then(res => res.json())
-        .then(cells => {
-          cells.forEach(function(cell) {
-            if (cell.lat != null && cell.lon != null) {
-              var info = 'Base Station\\nCell ID: ' + cell.cell_id + '\\nType: ' + cell.type + '\\nCount: ' + cell.count;
-              createDataPoint(cell.lat, cell.lon, 1.0, info, true);
-            }
-          });
-        })
-        .catch(err => console.error('Failed to load base station data:', err));
-    }
-
-    // Initialize
-    loadCellIds();
-    updateMap();
-    setInterval(function() {
-      loadCellIds();
-      updateMap();
-    }, 30000); // 30秒ごとに更新
-  </script>
-</body>
-</html>
-    """
+    return render_template('map.html')
 
 
 if __name__ == '__main__':
