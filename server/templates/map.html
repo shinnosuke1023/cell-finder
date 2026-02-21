@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Cell Logger Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqhU=" crossorigin=""></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
+    #wrapper { display: flex; flex-direction: column; height: 100%; }
+    #controls { padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; flex-shrink: 0; }
+    #controls label { margin-right: 4px; }
+    #controls select, #controls button { padding: 4px 8px; margin-right: 12px; }
+    #status { padding: 6px 12px; background: #e8f4f8; border-bottom: 1px solid #bee5eb; font-size: 0.9em; flex-shrink: 0; }
+    #map { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="wrapper">
+    <div id="controls">
+      <strong>Cell Logger Map</strong>
+      &nbsp;
+      <label for="cellIdFilter">Cell ID:</label>
+      <select id="cellIdFilter">
+        <option value="">All Cell IDs</option>
+      </select>
+
+      <label for="displayMode">Mode:</label>
+      <select id="displayMode">
+        <option value="heatmap">Heatmap</option>
+        <option value="pins">Pins</option>
+      </select>
+
+      <button onclick="updateMap()">Refresh</button>
+    </div>
+    <div id="status">Loading…</div>
+    <div id="map"></div>
+  </div>
+
+  <script>
+    var map = L.map('map').setView([35.68, 139.69], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    var statusEl = document.getElementById('status');
+
+    // Layer groups so we can clear them independently
+    var heatLayer = L.layerGroup().addTo(map);
+    var pinLayer  = L.layerGroup().addTo(map);
+    var bsLayer   = L.layerGroup().addTo(map);
+
+    // 📡 icon for base stations
+    var bsIcon = L.divIcon({
+      html: '<span style="font-size:20px;line-height:1;">📡</span>',
+      className: '',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    function rssiColor(rssi) {
+      if (rssi >= -60)  return '#ff0000';
+      if (rssi >= -75)  return '#ff8000';
+      if (rssi >= -90)  return '#ffff00';
+      if (rssi >= -105) return '#80ff00';
+      return '#0080ff';
+    }
+
+    function rssiRadius(rssi) {
+      return Math.max(4, Math.min(16, (rssi + 140) / 6));
+    }
+
+    function loadCellIds() {
+      fetch('/cell_ids')
+        .then(function(r) { return r.json(); })
+        .then(function(ids) {
+          var sel = document.getElementById('cellIdFilter');
+          while (sel.children.length > 1) sel.removeChild(sel.lastChild);
+          ids.forEach(function(id) {
+            var opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = id;
+            sel.appendChild(opt);
+          });
+        })
+        .catch(function(e) { console.error('cell_ids error', e); });
+    }
+
+    function updateMap() {
+      var mode = document.getElementById('displayMode').value;
+      var cellId = document.getElementById('cellIdFilter').value;
+      statusEl.textContent = 'Loading…';
+      heatLayer.clearLayers();
+      pinLayer.clearLayers();
+      bsLayer.clearLayers();
+
+      var bounds = [];
+
+      // Base stations (always shown)
+      fetch('/cell_map')
+        .then(function(r) { return r.json(); })
+        .then(function(cells) {
+          cells.forEach(function(cell) {
+            if (cell.lat == null || cell.lon == null) return;
+            if (cellId && cell.cell_id !== cellId) return;
+            var m = L.marker([cell.lat, cell.lon], { icon: bsIcon })
+              .bindPopup('📡 ' + cell.cell_id + '<br>Type: ' + cell.type + '<br>Count: ' + cell.count);
+            bsLayer.addLayer(m);
+            bounds.push([cell.lat, cell.lon]);
+          });
+          fitIfNeeded(bounds);
+        })
+        .catch(function(e) { console.error('cell_map error', e); });
+
+      if (mode === 'heatmap') {
+        var url = '/heatmap_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            data.forEach(function(pt) {
+              var lat = pt[0], lon = pt[1], intensity = pt[2];
+              // Back-calculate approximate RSSI from intensity
+              var approxRssi = intensity * 100 - 120;
+              var cm = L.circleMarker([lat, lon], {
+                radius: rssiRadius(approxRssi),
+                fillColor: rssiColor(approxRssi),
+                color: 'transparent',
+                fillOpacity: Math.max(0.3, intensity * 0.8)
+              }).bindPopup('Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6) + '<br>Intensity: ' + intensity.toFixed(2));
+              heatLayer.addLayer(cm);
+              bounds.push([lat, lon]);
+            });
+            statusEl.textContent = 'Heatmap: ' + data.length + ' points' + (cellId ? ' (Cell: ' + cellId + ')' : '');
+            fitIfNeeded(bounds);
+          })
+          .catch(function(e) {
+            statusEl.textContent = 'Error loading heatmap: ' + e.message;
+            console.error(e);
+          });
+      } else {
+        var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            data.forEach(function(row) {
+              if (row.lat == null || row.lon == null) return;
+              var rssi = row.rssi != null ? row.rssi : -100;
+              var cm = L.circleMarker([row.lat, row.lon], {
+                radius: rssiRadius(rssi),
+                fillColor: rssiColor(rssi),
+                color: '#333',
+                weight: 1,
+                fillOpacity: 0.75
+              }).bindPopup('Type: ' + row.type + '<br>RSSI: ' + rssi + ' dBm<br>Cell: ' + row.cell_id);
+              pinLayer.addLayer(cm);
+              bounds.push([row.lat, row.lon]);
+            });
+            statusEl.textContent = 'Pins: ' + data.length + ' points' + (cellId ? ' (Cell: ' + cellId + ')' : '');
+            fitIfNeeded(bounds);
+          })
+          .catch(function(e) {
+            statusEl.textContent = 'Error loading pins: ' + e.message;
+            console.error(e);
+          });
+      }
+    }
+
+    function fitIfNeeded(bounds) {
+      if (bounds.length > 0) {
+        map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
+      }
+    }
+
+    // Initialise
+    loadCellIds();
+    updateMap();
+    setInterval(function() {
+      loadCellIds();
+      updateMap();
+    }, 30000);
+  </script>
+</body>
+</html>

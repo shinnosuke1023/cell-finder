@@ -55,6 +55,9 @@ __pycache__/
 *.pyo
 pip-log.txt
 
+# SQLite databases (generated at runtime)
+*.db
+
 # IDE/editor folders
 .vscode/
 
