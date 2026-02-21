@@ -25,6 +25,7 @@
       <label for="cellIdFilter">Cell ID:</label>
       <select id="cellIdFilter">
         <option value="">All Cell IDs</option>
+        <option value="__connected__">接続中のセル</option>
       </select>
 
       <label for="displayMode">Mode:</label>
@@ -113,13 +114,16 @@
       return out;
     }
 
+    var connectedCellId = null;
+
     function loadCellIds() {
       fetch('/cell_ids')
         .then(function(r) { return r.json(); })
         .then(function(ids) {
           var sel = document.getElementById('cellIdFilter');
           var prev = sel.value;
-          while (sel.children.length > 1) sel.removeChild(sel.lastChild);
+          // Keep the first two options (All Cell IDs + Connected Cell)
+          while (sel.children.length > 2) sel.removeChild(sel.lastChild);
           ids.forEach(function(id) {
             var opt = document.createElement('option');
             opt.value = id;
@@ -129,6 +133,27 @@
           if (prev) sel.value = prev;
         })
         .catch(function(e) { console.error('cell_ids error', e); });
+
+      // Update connected cell ID
+      fetch('/connected_cell')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var newId = data.connected_cell_id;
+          var sel = document.getElementById('cellIdFilter');
+          var connectedOpt = sel.children[1];
+          if (newId) {
+            connectedOpt.textContent = '接続中のセル（' + newId + '）';
+          } else {
+            connectedOpt.textContent = '接続中のセル';
+          }
+          var previousConnected = connectedCellId;
+          connectedCellId = newId;
+          // If user has "connected cell" selected and it changed, refresh map
+          if (sel.value === '__connected__' && previousConnected !== newId) {
+            updateMap(false);
+          }
+        })
+        .catch(function(e) { console.error('connected_cell error', e); });
     }
 
     function toggleDebug() {
@@ -143,6 +168,10 @@
     function updateMap(shouldFit) {
       var mode = document.getElementById('displayMode').value;
       var cellId = document.getElementById('cellIdFilter').value;
+      // Resolve "connected cell" to the actual connected cell ID
+      if (cellId === '__connected__') {
+        cellId = connectedCellId || '';
+      }
       statusEl.textContent = 'Loading…';
       heatLayer.clearLayers();
       pinLayer.clearLayers();

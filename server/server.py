@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
+# In-memory storage for the latest connected cell ID reported by the device
+_connected_cell_id = None
+
 
 @app.teardown_appcontext
 def _close_db(exception):
@@ -71,6 +74,12 @@ def log():
                    cell.get("cell_id")))
     db.commit()
     logger.debug("Logged %d cell records", len(cells))
+
+    # Update connected cell ID if provided
+    global _connected_cell_id
+    connected = data.get("connected_cell_id")
+    if connected is not None:
+        _connected_cell_id = connected
 
     # Log warning when GSM cells are detected
     gsm_cells = [c for c in cells if c.get("type") == "GSM"]
@@ -178,6 +187,12 @@ def get_cell_ids():
     rows = c.fetchall()
     cell_ids = [row[0] for row in rows]
     return jsonify(cell_ids)
+
+
+@app.route('/connected_cell')
+def get_connected_cell():
+    """現在接続中のセルIDを返す"""
+    return jsonify({"connected_cell_id": _connected_cell_id})
 
 
 def _rssi_to_distance_m(rssi_dbm: float, n: float, ref_rssi_dbm: float, ref_dist_m: float) -> float:

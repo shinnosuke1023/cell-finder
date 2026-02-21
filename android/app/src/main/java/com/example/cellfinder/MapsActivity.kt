@@ -46,6 +46,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val DEFAULT_ZOOM = 12f
         private const val TOKYO_LAT = 35.6762
         private const val TOKYO_LON = 139.6503
+        private const val CONNECTED_CELL_MARKER = "__CONNECTED_CELL__"
     }
 
     private lateinit var googleMap: GoogleMap
@@ -83,6 +84,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var allCellIds = listOf<String>()
     private var currentDisplayMode = DisplayMode.RSSI_CIRCLES
     private var selectedCellId: String? = null
+    private var currentConnectedCellId: String? = null
     // Follow location state
     private lateinit var followLocationButton: ImageButton
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -250,10 +252,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                 val selectedItem = parent?.getItemAtPosition(position)?.toString() ?: ""
                 
-                selectedCellId = if (position == 0 || selectedItem.startsWith(getString(R.string.all_cell_ids))) {
-                    null
-                } else {
-                    selectedItem
+                selectedCellId = when {
+                    position == 0 || selectedItem.startsWith(getString(R.string.all_cell_ids)) -> null
+                    position == 1 || selectedItem.startsWith(getString(R.string.connected_cell_id)) -> CONNECTED_CELL_MARKER
+                    else -> selectedItem
                 }
                 
                 Log.d(TAG, "Cell ID filter changed to: $selectedCellId")
@@ -425,6 +427,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             items[0] = getString(R.string.all_cell_ids_count, allCellIds.size)
         }
         
+        // Add "Connected Cell" option at position 1
+        val connectedId = currentConnectedCellId
+        if (connectedId != null) {
+            items.add(getString(R.string.connected_cell_id_with_name, connectedId))
+        } else {
+            items.add(getString(R.string.connected_cell_id))
+        }
+        
         // Simply add all cell IDs for now - we'll handle performance differently
         items.addAll(allCellIds)
         
@@ -477,8 +487,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         clearMapElements()
         
         // Filter data based on selected cell ID
-        val filteredLogs = if (selectedCellId != null) {
-            allCellLogs.filter { it.cellId == selectedCellId }
+        val filterCellId = if (selectedCellId == CONNECTED_CELL_MARKER) {
+            currentConnectedCellId
+        } else {
+            selectedCellId
+        }
+        val filteredLogs = if (filterCellId != null) {
+            allCellLogs.filter { it.cellId == filterCellId }
         } else {
             allCellLogs
         }
@@ -762,7 +777,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             if (baseStation.lat == null || baseStation.lon == null) continue
             
             // Only show base stations for the selected cell ID if filtering is active
-            if (selectedCellId != null && baseStation.cellId != selectedCellId) continue
+            val filterCellId = if (selectedCellId == CONNECTED_CELL_MARKER) {
+                currentConnectedCellId
+            } else {
+                selectedCellId
+            }
+            if (filterCellId != null && baseStation.cellId != filterCellId) continue
             
             val marker = googleMap.addMarker(
                 MarkerOptions()
@@ -903,6 +923,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             if (cellInfo.isNullOrEmpty()) {
                 currentCellInfoTextView.text = getString(R.string.no_cell_info)
                 currentCellInfoTextView.visibility = android.view.View.VISIBLE
+                updateConnectedCellId(null)
                 return
             }
             
@@ -936,15 +957,74 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 
                 currentCellInfoTextView.text = getString(R.string.cell_connected, cellDetails)
                 currentCellInfoTextView.visibility = android.view.View.VISIBLE
+                
+                // Extract connected cell ID in database format and update tracking
+                updateConnectedCellId(extractCellIdFromCellInfo(connectedCell))
             } else {
                 currentCellInfoTextView.text = getString(R.string.cell_not_connected, cellInfo.size)
                 currentCellInfoTextView.visibility = android.view.View.VISIBLE
+                updateConnectedCellId(null)
             }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error getting current cell info: ${e.message}", e)
             currentCellInfoTextView.text = getString(R.string.cell_info_error)
             currentCellInfoTextView.visibility = android.view.View.VISIBLE
+        }
+    }
+    
+    private fun extractCellIdFromCellInfo(cellInfo: android.telephony.CellInfo): String? {
+        return try {
+            when (cellInfo) {
+                is android.telephony.CellInfoGsm -> {
+                    val id = cellInfo.cellIdentity
+                    if (id.cid != Int.MAX_VALUE && id.cid != -1) {
+                        "GSM:${id.mccString}-${id.mncString}:${id.lac}-${id.cid}"
+                    } else null
+                }
+                is android.telephony.CellInfoWcdma -> {
+                    val id = cellInfo.cellIdentity
+                    if (id.cid != Int.MAX_VALUE && id.cid != -1) {
+                        "WCDMA:${id.mccString}-${id.mncString}:${id.lac}-${id.cid}"
+                    } else null
+                }
+                is android.telephony.CellInfoLte -> {
+                    val id = cellInfo.cellIdentity
+                    if (id.ci != Int.MAX_VALUE && id.ci != -1) {
+                        "LTE:${id.mccString}-${id.mncString}:${id.tac}-${id.ci}"
+                    } else null
+                }
+                is android.telephony.CellInfoNr -> {
+                    val nrId = cellInfo.cellIdentity
+                    fun call(name: String): Any? = try {
+                        nrId.javaClass.getMethod(name).invoke(nrId)
+                    } catch (_: Exception) { null }
+                    val nci = call("getNci")
+                    val tac = call("getTac")
+                    val mcc = call("getMccString") ?: call("getMcc")
+                    val mnc = call("getMncString") ?: call("getMnc")
+                    if (nci != null) {
+                        "NR:${mcc}-${mnc}:${tac}-${nci}"
+                    } else null
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract cell id: ${e.message}")
+            null
+        }
+    }
+    
+    private fun updateConnectedCellId(newCellId: String?) {
+        val previousCellId = currentConnectedCellId
+        currentConnectedCellId = newCellId
+        Log.d(TAG, "Connected cell ID updated: $previousCellId -> $newCellId")
+        
+        // If the connected cell changed and user has "connected cell" filter selected,
+        // refresh the visualization and spinner to reflect the change
+        if (previousCellId != newCellId && selectedCellId == CONNECTED_CELL_MARKER) {
+            updateCellIdSpinner()
+            updateMapVisualization()
         }
     }
 
