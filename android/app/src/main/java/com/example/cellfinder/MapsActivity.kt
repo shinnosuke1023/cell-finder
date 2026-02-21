@@ -497,10 +497,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         } else {
             selectedCellId
         }
-        val filteredLogs = if (filterCellId != null) {
-            allCellLogs.filter { it.cellId == filterCellId }
-        } else {
-            allCellLogs
+        val filteredLogs = when {
+            // Connected-cell filter selected, but we don't currently have a connected cell:
+            // treat this as "no results" instead of falling back to all logs.
+            selectedCellId == CONNECTED_CELL_MARKER && filterCellId == null -> {
+                Log.w(TAG, "Connected-cell filter selected but currentConnectedCellId is null; showing no results")
+                emptyList<CellLog>()
+            }
+            filterCellId != null -> {
+                allCellLogs.filter { it.cellId == filterCellId }
+            }
+            else -> {
+                allCellLogs
+            }
         }
         
         Log.d(TAG, "Filtered logs: ${filteredLogs.size} from ${allCellLogs.size} total logs")
@@ -787,6 +796,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             } else {
                 selectedCellId
             }
+            // When connected-cell filter is active but no connected cell is available, skip all markers
+            if (selectedCellId == CONNECTED_CELL_MARKER && filterCellId == null) continue
             if (filterCellId != null && baseStation.cellId != filterCellId) continue
             
             val marker = googleMap.addMarker(
