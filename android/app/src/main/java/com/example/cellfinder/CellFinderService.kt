@@ -90,16 +90,15 @@ class CellFinderService : Service() {
         if (unsyncedLogs.isEmpty()) return
         Log.d(TAG, "Retrying ${unsyncedLogs.size} unsynced logs")
 
-        // Group by timestamp so each retry payload matches the original batched structure
-        unsyncedLogs.groupBy { it.second.timestamp }.forEach { (_, logsForTimestamp) ->
-            val firstLog = logsForTimestamp.first().second
-            val cells = logsForTimestamp.map { (_, cellLog) ->
+        // Group by (timestamp, lat, lon) to better approximate original sampling batches
+        unsyncedLogs.groupBy { (_, log) -> Triple(log.timestamp, log.lat, log.lon) }
+            .forEach { (_, logsForBatch) ->
+            val firstLog = logsForBatch.first().second
+            val cells = logsForBatch.map { (_, cellLog) ->
                 mapOf(
                     "type" to cellLog.type,
                     "rssi" to cellLog.rssi,
-                    "cell_id" to cellLog.cellId,
-                    "dbm" to cellLog.rssi,
-                    "hasIdentity" to (cellLog.cellId != null)
+                    "cell_id" to cellLog.cellId
                 )
             }
             val payload = mapOf(
@@ -111,7 +110,7 @@ class CellFinderService : Service() {
                 "anyTypeKnown" to false,
                 "cells" to cells
             )
-            val ids = logsForTimestamp.map { it.first }
+            val ids = logsForBatch.map { it.first }
             sendJson(payload, ids)
         }
     }
@@ -306,14 +305,14 @@ class CellFinderService : Service() {
     }
 
     private fun sendJson(data: Any, logIds: List<Long> = emptyList()) {
+        // Register IDs as in-flight before the request so the catch block can always remove them
+        if (logIds.isNotEmpty()) {
+            pendingSyncIds.addAll(logIds)
+        }
         try {
             val json = gson.toJson(data)
             Log.d(TAG, "Sending JSON to $SERVER_URL")
             Log.v(TAG, "JSON payload: $json")
-
-            if (logIds.isNotEmpty()) {
-                pendingSyncIds.addAll(logIds)
-            }
 
             val body = json.toRequestBody("application/json".toMediaTypeOrNull())
             val req = Request.Builder().url(SERVER_URL).post(body).build()
@@ -321,19 +320,20 @@ class CellFinderService : Service() {
             client.newCall(req).enqueue(object: Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     Log.e(TAG, "HTTP request failed: ${e.message}")
-                    pendingSyncIds.removeAll(logIds.toSet())
+                    handler.post { pendingSyncIds.removeAll(logIds.toSet()) }
                 }
                 override fun onResponse(call: Call, response: Response) {
-                    Log.d(TAG, "HTTP response: ${response.code} ${response.message}")
-                    if (response.isSuccessful) {
-                        if (logIds.isNotEmpty()) {
+                    val code = response.code
+                    Log.d(TAG, "HTTP response: $code ${response.message}")
+                    val successful = response.isSuccessful
+                    if (!successful) Log.w(TAG, "Server returned error: $code")
+                    response.close()
+                    handler.post {
+                        if (successful && logIds.isNotEmpty()) {
                             cellDatabase.markAsSynced(logIds)
                         }
-                    } else {
-                        Log.w(TAG, "Server returned error: ${response.code}")
+                        pendingSyncIds.removeAll(logIds.toSet())
                     }
-                    pendingSyncIds.removeAll(logIds.toSet())
-                    response.close()
                 }
             })
         } catch (e: Exception) {
@@ -406,7 +406,8 @@ class CellFinderService : Service() {
         Log.i(TAG, "Logging runnable stopped")
         try {
             client.dispatcher.cancelAll()
-            Log.i(TAG, "All in-flight HTTP requests cancelled")
+            pendingSyncIds.clear()
+            Log.i(TAG, "All in-flight HTTP requests cancelled and pendingSyncIds cleared")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to cancel in-flight HTTP requests", e)
         }

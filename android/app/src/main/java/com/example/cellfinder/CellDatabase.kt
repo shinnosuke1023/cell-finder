@@ -39,6 +39,9 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         private const val COLUMN_RSSI = "rssi"
         private const val COLUMN_CELL_ID = "cell_id"
         private const val COLUMN_SYNCED = "synced"
+
+        // Unsynced records older than this are purged regardless of sync status
+        private const val MAX_UNSYNCED_AGE_MS = 7L * 24 * 60 * 60 * 1000 // 7 days
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -103,7 +106,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
             db.setTransactionSuccessful()
             Log.d(TAG, "Inserted ${cellLogs.size} cell logs")
         } catch (e: Exception) {
-            Log.e(TAG, "Transaction failed, rolling back inserts: ${e.message}", e)
+            Log.e(TAG, "Transaction failed after ${ids.size} insert(s), rolling back: ${e.message}", e)
             return emptyList()
         } finally {
             db.endTransaction()
@@ -209,7 +212,14 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
             "$COLUMN_TIMESTAMP < ? AND $COLUMN_SYNCED = 1",
             arrayOf(cutoffTime.toString())
         )
-        Log.d(TAG, "Cleared $deletedRows old synced records")
+        // Also purge very old unsynced records to prevent unbounded DB growth if they never sync
+        val unsyncedCutoffTime = System.currentTimeMillis() - MAX_UNSYNCED_AGE_MS
+        val deletedUnsynced = db.delete(
+            TABLE_LOGS,
+            "$COLUMN_TIMESTAMP < ? AND $COLUMN_SYNCED = 0",
+            arrayOf(unsyncedCutoffTime.toString())
+        )
+        Log.d(TAG, "Cleared $deletedRows old synced records and $deletedUnsynced old unsynced records")
     }
     
     fun clearAllLogs(): Int {
