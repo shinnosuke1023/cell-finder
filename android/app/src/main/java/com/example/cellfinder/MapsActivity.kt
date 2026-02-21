@@ -1228,6 +1228,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         // Resume follow mode if it was active
         if (isFollowingLocation) {
+            followLocationButton.setImageResource(R.drawable.ic_my_location_filled)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_on_description)
             startFollowingLocation()
         }
     }
