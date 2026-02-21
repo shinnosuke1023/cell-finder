@@ -231,7 +231,7 @@ def cell_map():
     ref_dist = request.args.get('ref_dist', default=1.0, type=float)
     bandwidth_m = request.args.get('bandwidth_m', default=150.0, type=float)
     method = request.args.get('method', default='accum', type=str)
-    debug_flag = request.args.get('debug', default=0, type=int)
+    debug_flag = request.args.get('debug', default=1, type=int)
 
     # 期間フィルタ
     params = []

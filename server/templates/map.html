@@ -27,6 +27,7 @@
 
       <label for="displayMode">Mode:</label>
       <select id="displayMode">
+        <option value="rssi_circles">RSSI Circles</option>
         <option value="heatmap">Heatmap</option>
         <option value="pins">Pins</option>
       </select>
@@ -47,28 +48,71 @@
     var statusEl = document.getElementById('status');
 
     // Layer groups so we can clear them independently
-    var heatLayer = L.layerGroup().addTo(map);
-    var pinLayer  = L.layerGroup().addTo(map);
-    var bsLayer   = L.layerGroup().addTo(map);
+    var heatLayer   = L.layerGroup().addTo(map);
+    var pinLayer    = L.layerGroup().addTo(map);
+    var bsLayer     = L.layerGroup().addTo(map);
+    var debugLayer  = L.layerGroup().addTo(map);
 
-    // 📡 icon for base stations
-    var bsIcon = L.divIcon({
-      html: '<span style="font-size:20px;line-height:1;">📡</span>',
-      className: '',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-
-    function rssiColor(rssi) {
-      if (rssi >= -60)  return '#ff0000';
-      if (rssi >= -75)  return '#ff8000';
-      if (rssi >= -90)  return '#ffff00';
-      if (rssi >= -105) return '#80ff00';
-      return '#0080ff';
+    /* ── RSSI → colour (matches Android Blue→Cyan→Green→Yellow→Red) ──────── */
+    function rssiToColor(rssi) {
+      var rssiMin = -120, rssiMax = -20;
+      var n = Math.max(0, Math.min(1, (rssi - rssiMin) / (rssiMax - rssiMin)));
+      var r, g, b;
+      if (n <= 0.25) {
+        var f = n / 0.25;
+        r = 0; g = Math.round(f * 255); b = 255;
+      } else if (n <= 0.5) {
+        var f = (n - 0.25) / 0.25;
+        r = 0; g = 255; b = Math.round(255 * (1 - f));
+      } else if (n <= 0.75) {
+        var f = (n - 0.5) / 0.25;
+        r = Math.round(f * 255); g = 255; b = 0;
+      } else {
+        var f = (n - 0.75) / 0.25;
+        r = 255; g = Math.round(255 * (1 - f)); b = 0;
+      }
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
     }
 
-    function rssiRadius(rssi) {
-      return Math.max(4, Math.min(16, (rssi + 140) / 6));
+    function rssiToFillColor(rssi) {
+      var rssiMin = -120, rssiMax = -20;
+      var n = Math.max(0, Math.min(1, (rssi - rssiMin) / (rssiMax - rssiMin)));
+      var r, g, b;
+      if (n <= 0.25) {
+        var f = n / 0.25;
+        r = 0; g = Math.round(f * 255); b = 255;
+      } else if (n <= 0.5) {
+        var f = (n - 0.25) / 0.25;
+        r = 0; g = 255; b = Math.round(255 * (1 - f));
+      } else if (n <= 0.75) {
+        var f = (n - 0.5) / 0.25;
+        r = Math.round(f * 255); g = 255; b = 0;
+      } else {
+        var f = (n - 0.75) / 0.25;
+        r = 255; g = Math.round(255 * (1 - f)); b = 0;
+      }
+      return 'rgba(' + r + ',' + g + ',' + b + ',0.59)';
+    }
+
+    /* ── Grid bucketing (matches Android 25m grid) ───────────────────────── */
+    function gridBucket(data, gridSizeMeters) {
+      gridSizeMeters = gridSizeMeters || 25;
+      var grid = {};
+      data.forEach(function(row) {
+        if (row.lat == null || row.lon == null) return;
+        var rssi = row.rssi != null ? row.rssi : -100;
+        var latDeg = gridSizeMeters / 111320.0;
+        var lonDeg = gridSizeMeters / (111320.0 * Math.cos(row.lat * Math.PI / 180));
+        var gi = Math.floor(row.lat / latDeg);
+        var gj = Math.floor(row.lon / lonDeg);
+        var key = gi + '_' + gj;
+        if (!grid[key] || rssi > grid[key].rssi) {
+          grid[key] = {lat: row.lat, lon: row.lon, rssi: rssi, type: row.type, cell_id: row.cell_id, timestamp: row.timestamp};
+        }
+      });
+      var out = [];
+      for (var k in grid) out.push(grid[k]);
+      return out;
     }
 
     function loadCellIds() {
@@ -76,6 +120,7 @@
         .then(function(r) { return r.json(); })
         .then(function(ids) {
           var sel = document.getElementById('cellIdFilter');
+          var prev = sel.value;
           while (sel.children.length > 1) sel.removeChild(sel.lastChild);
           ids.forEach(function(id) {
             var opt = document.createElement('option');
@@ -83,6 +128,7 @@
             opt.textContent = id;
             sel.appendChild(opt);
           });
+          if (prev) sel.value = prev;
         })
         .catch(function(e) { console.error('cell_ids error', e); });
     }
@@ -94,51 +140,123 @@
       heatLayer.clearLayers();
       pinLayer.clearLayers();
       bsLayer.clearLayers();
+      debugLayer.clearLayers();
 
       var bounds = [];
 
-      // Base stations (always shown)
+      // Base stations (always shown) with debug circles
       fetch('/cell_map')
         .then(function(r) { return r.json(); })
         .then(function(cells) {
           cells.forEach(function(cell) {
             if (cell.lat == null || cell.lon == null) return;
             if (cellId && cell.cell_id !== cellId) return;
-            var m = L.marker([cell.lat, cell.lon], { icon: bsIcon })
-              .bindPopup('📡 ' + cell.cell_id + '<br>Type: ' + cell.type + '<br>Count: ' + cell.count);
-            bsLayer.addLayer(m);
+
+            // Red circle marker for estimated base station (matches Android red marker)
+            var bsMarker = L.circleMarker([cell.lat, cell.lon], {
+              radius: 8,
+              fillColor: '#ff0000',
+              color: '#cc0000',
+              weight: 2,
+              fillOpacity: 0.9
+            }).bindPopup(
+              '<b>Estimated Base Station</b><br>' +
+              'Cell ID: ' + cell.cell_id + '<br>' +
+              'Type: ' + (cell.type || 'Unknown') + '<br>' +
+              'Observations: ' + cell.count
+            );
+            bsLayer.addLayer(bsMarker);
             bounds.push([cell.lat, cell.lon]);
+
+            // Debug circles showing estimated distance from each observation
+            if (cell.debug && cell.debug.circles) {
+              cell.debug.circles.forEach(function(dc) {
+                var circle = L.circle([dc.lat, dc.lon], {
+                  radius: dc.radius_m,
+                  color: 'rgba(102,102,102,0.39)',
+                  weight: 1,
+                  fillColor: 'transparent',
+                  fill: false
+                });
+                debugLayer.addLayer(circle);
+              });
+            }
           });
           fitIfNeeded(bounds);
         })
         .catch(function(e) { console.error('cell_map error', e); });
 
-      if (mode === 'heatmap') {
-        var url = '/heatmap_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
+      if (mode === 'rssi_circles') {
+        // RSSI Circles mode (matches Android RSSI_CIRCLES)
+        var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
         fetch(url)
           .then(function(r) { return r.json(); })
           .then(function(data) {
-            data.forEach(function(pt) {
-              var lat = pt[0], lon = pt[1], intensity = pt[2];
-              // Back-calculate approximate RSSI from intensity
-              var approxRssi = intensity * 100 - 120;
-              var cm = L.circleMarker([lat, lon], {
-                radius: rssiRadius(approxRssi),
-                fillColor: rssiColor(approxRssi),
+            var bucketed = gridBucket(data, 25);
+            bucketed.forEach(function(row) {
+              var rssi = row.rssi != null ? row.rssi : -100;
+              var cm = L.circleMarker([row.lat, row.lon], {
+                radius: 8,
+                fillColor: rssiToFillColor(rssi),
+                color: 'rgba(0,0,0,0.78)',
+                weight: 1,
+                fillOpacity: 0.75
+              }).bindPopup(
+                '<b>Cell Tower Information</b><br>' +
+                'Cell ID: ' + (row.cell_id || 'Unknown') + '<br>' +
+                'Type: ' + (row.type || 'Unknown') + '<br>' +
+                'RSSI: ' + rssi + ' dBm<br>' +
+                'Lat: ' + row.lat.toFixed(6) + '<br>' +
+                'Lon: ' + row.lon.toFixed(6)
+              );
+              heatLayer.addLayer(cm);
+              bounds.push([row.lat, row.lon]);
+            });
+            statusEl.textContent = 'RSSI Circles: ' + bucketed.length + ' points (from ' + data.length + ' records)' +
+              (cellId ? ' (Cell: ' + cellId + ')' : '');
+            fitIfNeeded(bounds);
+          })
+          .catch(function(e) {
+            statusEl.textContent = 'Error loading RSSI circles: ' + e.message;
+            console.error(e);
+          });
+
+      } else if (mode === 'heatmap') {
+        // Heatmap mode with grid bucketing (matches Android heatmap)
+        var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var bucketed = gridBucket(data, 25);
+            bucketed.forEach(function(row) {
+              var rssi = row.rssi != null ? row.rssi : -100;
+              var intensity = Math.max(0.1, Math.min(1.0, (rssi + 120) / 100));
+              var cm = L.circleMarker([row.lat, row.lon], {
+                radius: Math.max(6, Math.min(18, intensity * 16)),
+                fillColor: rssiToColor(rssi),
                 color: 'transparent',
                 fillOpacity: Math.max(0.3, intensity * 0.8)
-              }).bindPopup('Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6) + '<br>Intensity: ' + intensity.toFixed(2));
+              }).bindPopup(
+                'Lat: ' + row.lat.toFixed(6) + '<br>' +
+                'Lon: ' + row.lon.toFixed(6) + '<br>' +
+                'RSSI: ' + rssi + ' dBm<br>' +
+                'Type: ' + (row.type || 'Unknown') + '<br>' +
+                'Cell: ' + (row.cell_id || 'Unknown')
+              );
               heatLayer.addLayer(cm);
-              bounds.push([lat, lon]);
+              bounds.push([row.lat, row.lon]);
             });
-            statusEl.textContent = 'Heatmap: ' + data.length + ' points' + (cellId ? ' (Cell: ' + cellId + ')' : '');
+            statusEl.textContent = 'Heatmap: ' + bucketed.length + ' points (from ' + data.length + ' records)' +
+              (cellId ? ' (Cell: ' + cellId + ')' : '');
             fitIfNeeded(bounds);
           })
           .catch(function(e) {
             statusEl.textContent = 'Error loading heatmap: ' + e.message;
             console.error(e);
           });
+
       } else {
+        // Pins mode (matches Android Pins)
         var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
         fetch(url)
           .then(function(r) { return r.json(); })
@@ -147,12 +265,16 @@
               if (row.lat == null || row.lon == null) return;
               var rssi = row.rssi != null ? row.rssi : -100;
               var cm = L.circleMarker([row.lat, row.lon], {
-                radius: rssiRadius(rssi),
-                fillColor: rssiColor(rssi),
+                radius: 6,
+                fillColor: '#4286f4',
                 color: '#333',
                 weight: 1,
                 fillOpacity: 0.75
-              }).bindPopup('Type: ' + row.type + '<br>RSSI: ' + rssi + ' dBm<br>Cell: ' + row.cell_id);
+              }).bindPopup(
+                'Type: ' + (row.type || 'Unknown') + '<br>' +
+                'RSSI: ' + rssi + ' dBm<br>' +
+                'Cell: ' + (row.cell_id || 'Unknown')
+              );
               pinLayer.addLayer(cm);
               bounds.push([row.lat, row.lon]);
             });
@@ -178,7 +300,7 @@
     setInterval(function() {
       loadCellIds();
       updateMap();
-    }, 30000);
+    }, 10000);
   </script>
 </body>
 </html>
