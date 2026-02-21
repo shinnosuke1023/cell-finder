@@ -3,8 +3,13 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Crosshair ring only (no filled center) -->
+    <!-- Navigation arrow pointing upper-right (outline only) -->
     <path
         android:fillColor="#666666"
-        android:pathData="M20.94,11c-0.46,-4.17 -3.77,-7.48 -7.94,-7.94V1h-2v2.06C6.83,3.52 3.52,6.83 3.06,11H1v2h2.06c0.46,4.17 3.77,7.48 7.94,7.94V23h2v-2.06c4.17,-0.46 7.48,-3.77 7.94,-7.94H23v-2h-2.06zM12,19c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7z" />
+        android:pathData="M12,2L4.5,20.29l0.71,0.71L12,18l6.79,3 0.71,-0.71z"
+        android:strokeWidth="0"
+        android:strokeColor="#00000000" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,5.83l3.95,11.85L12,15.65l-3.95,2.03z" />
 </vector>

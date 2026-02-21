@@ -324,6 +324,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             handleCircleClick(circle)
         }
         
+        // Disable follow mode when user manually moves the map
+        googleMap.setOnCameraMoveStartedListener { reason ->
+            if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE && isFollowingLocation) {
+                stopFollowingLocation()
+                isFollowingLocation = false
+                followLocationButton.setImageResource(R.drawable.ic_my_location_outline)
+                followLocationButton.contentDescription = getString(R.string.btn_follow_off)
+                Log.d(TAG, "Follow mode disabled by user gesture")
+            }
+        }
+        
         // Enable location if permitted
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == 
             PackageManager.PERMISSION_GRANTED) {
