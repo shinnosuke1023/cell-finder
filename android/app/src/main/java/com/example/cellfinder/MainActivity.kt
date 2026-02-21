@@ -102,8 +102,10 @@ class MainActivity : Activity() {
         }
 
         Log.d(TAG, "onCreate() completed")
+    }
 
-        // Register GSM alert broadcast receiver
+    override fun onStart() {
+        super.onStart()
         val filter = IntentFilter(CellFinderService.ACTION_GSM_DETECTED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(gsmAlertReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -111,6 +113,17 @@ class MainActivity : Activity() {
             registerReceiver(gsmAlertReceiver, filter)
         }
         Log.d(TAG, "GSM alert receiver registered")
+    }
+
+    override fun onStop() {
+        Log.d(TAG, "onStop() called")
+        try {
+            unregisterReceiver(gsmAlertReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister receiver: ${e.message}")
+        }
+        isGsmAlertShowing = false
+        super.onStop()
     }
 
     private fun showGsmAlertDialog() {
@@ -128,16 +141,6 @@ class MainActivity : Activity() {
             }
             .setIcon(android.R.drawable.ic_dialog_alert)
             .show()
-    }
-
-    override fun onDestroy() {
-        Log.d(TAG, "onDestroy() called")
-        try {
-            unregisterReceiver(gsmAlertReceiver)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to unregister receiver: ${e.message}")
-        }
-        super.onDestroy()
     }
 
     private fun hasPermissions(): Boolean {

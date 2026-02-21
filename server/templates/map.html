@@ -303,7 +303,7 @@
 
     // ── GSM Alert polling ─────────────────────────────────────────────────
     var lastAlertTimestamp = 0;
-    var gsmAlertDismissed = false;
+    var dismissedAlertTimestamp = 0;
 
     function checkGsmAlerts() {
       fetch('/alerts')
@@ -311,9 +311,8 @@
         .then(function(alerts) {
           if (!alerts || alerts.length === 0) return;
           var latest = alerts[alerts.length - 1];
-          if (latest.timestamp > lastAlertTimestamp) {
+          if (latest.timestamp > lastAlertTimestamp && latest.timestamp > dismissedAlertTimestamp) {
             lastAlertTimestamp = latest.timestamp;
-            gsmAlertDismissed = false;
             var cellIds = latest.gsm_cells.map(function(c) { return c.cell_id || 'Unknown'; }).join(', ');
             var msg = latest.gsm_cells.length + ' GSM cell(s) detected';
             if (latest.lat != null && latest.lon != null) {
@@ -328,7 +327,7 @@
     }
 
     function dismissGsmAlert() {
-      gsmAlertDismissed = true;
+      dismissedAlertTimestamp = lastAlertTimestamp;
       document.getElementById('gsm-alert-banner').style.display = 'none';
     }
 
@@ -339,7 +338,7 @@
     setInterval(function() {
       loadCellIds();
       updateMap(false);
-      if (!gsmAlertDismissed) checkGsmAlerts();
+      checkGsmAlerts();
     }, 10000);
   </script>
 </body>
