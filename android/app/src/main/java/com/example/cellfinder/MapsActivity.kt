@@ -78,6 +78,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var allCellIds = listOf<String>()
     private var currentDisplayMode = DisplayMode.RSSI_CIRCLES
     private var selectedCellId: String? = null
+    // Service running state
+    private var servicesRunning = true
     private var isGsmAlertShowing = false
 
     private val gsmAlertReceiver = object : BroadcastReceiver() {
@@ -245,7 +247,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                 val selectedItem = parent?.getItemAtPosition(position)?.toString() ?: ""
                 
-                selectedCellId = if (position == 0 || selectedItem.startsWith("全セルID")) {
+                selectedCellId = if (position == 0 || selectedItem.startsWith(getString(R.string.all_cell_ids))) {
                     null
                 } else {
                     selectedItem
@@ -262,13 +264,40 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             updateMapData()
         }
         
-        // Setup stop services button
+        // Setup stop/start services toggle button
+        updateServiceButtonState()
         stopServicesButton.setOnClickListener {
-            Log.d(TAG, "Stop services button clicked on map screen")
-            stopService(Intent(this, CellFinderService::class.java))
-            stopService(Intent(this, TrackingService::class.java))
-            Toast.makeText(this, getString(R.string.status_logging_stopped), Toast.LENGTH_SHORT).show()
-            Log.i(TAG, "All services stopped from map screen")
+            if (servicesRunning) {
+                Log.d(TAG, "Stop services button clicked on map screen")
+                stopService(Intent(this, CellFinderService::class.java))
+                stopService(Intent(this, TrackingService::class.java))
+                servicesRunning = false
+                Toast.makeText(this, getString(R.string.services_stopped), Toast.LENGTH_SHORT).show()
+                Log.i(TAG, "All services stopped from map screen")
+            } else {
+                Log.d(TAG, "Start services button clicked on map screen")
+                startService(Intent(this, CellFinderService::class.java))
+                startService(Intent(this, TrackingService::class.java))
+                servicesRunning = true
+                Toast.makeText(this, getString(R.string.services_started), Toast.LENGTH_SHORT).show()
+                Log.i(TAG, "All services started from map screen")
+            }
+            updateServiceButtonState()
+        }
+    }
+    
+    private fun updateServiceButtonState() {
+        servicesRunning = CellFinderService.isRunning || TrackingService.isRunning
+        if (servicesRunning) {
+            stopServicesButton.text = getString(R.string.btn_stop)
+            stopServicesButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                resources.getColor(R.color.stop_button_background, theme)
+            )
+        } else {
+            stopServicesButton.text = getString(R.string.btn_start)
+            stopServicesButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                resources.getColor(R.color.start_button_background, theme)
+            )
         }
     }
 
@@ -359,7 +388,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating map data: ${e.message}", e)
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "マップデータ読み込みエラー: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, getString(R.string.toast_map_data_error, e.message), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -368,11 +397,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun updateCellIdSpinner() {
         Log.d(TAG, "updateCellIdSpinner called with ${allCellIds.size} cell IDs")
         
-        val items = mutableListOf("全セルID")
+        val items = mutableListOf(getString(R.string.all_cell_ids))
         
         // Add count to the first item
         if (allCellIds.isNotEmpty()) {
-            items[0] = "全セルID（${allCellIds.size}件）"
+            items[0] = getString(R.string.all_cell_ids_count, allCellIds.size)
         }
         
         // Simply add all cell IDs for now - we'll handle performance differently
@@ -401,14 +430,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             
         } catch (e: Exception) {
             Log.e(TAG, "Error updating cell ID spinner: ${e.message}", e)
-            Toast.makeText(this, "セルIDフィルタの更新に失敗: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_cell_id_filter_error, e.message), Toast.LENGTH_LONG).show()
         }
         
         // If there are many cell IDs, show a toast to inform user
         if (allCellIds.size > 50) {
             handler.post {
                 Toast.makeText(this@MapsActivity, 
-                    "セルIDが${allCellIds.size}件あります。スクロールが長くなる場合があります。", 
+                    getString(R.string.cell_ids_scroll_hint, allCellIds.size), 
                     Toast.LENGTH_LONG).show()
             }
         }
@@ -457,7 +486,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Don't auto-fit camera on updates to preserve user's view
         if (filteredLogs.isEmpty()) {
             Log.w(TAG, "No data to display on map")
-            Toast.makeText(this@MapsActivity, "表示するデータがありません", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MapsActivity, getString(R.string.toast_no_data), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -468,7 +497,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val rssiValues = cellLogs.mapNotNull { it.rssi }
         if (rssiValues.isEmpty()) {
             Log.w(TAG, "No valid RSSI values found")
-            Toast.makeText(this@MapsActivity, "有効なRSSIデータがありません", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MapsActivity, getString(R.string.toast_no_rssi_data), Toast.LENGTH_SHORT).show()
             return
         }
         
@@ -576,11 +605,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error creating RSSI-based heatmap: ${e.message}", e)
-                Toast.makeText(this@MapsActivity, "ヒートマップ作成エラー: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MapsActivity, getString(R.string.toast_heatmap_error, e.message), Toast.LENGTH_LONG).show()
             }
         } else {
             Log.w(TAG, "No valid data points for RSSI-based heatmap")
-            Toast.makeText(this@MapsActivity, "有効なデータがありません", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MapsActivity, getString(R.string.toast_no_valid_data), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -845,7 +874,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             Log.d(TAG, "Circle clicked: Cell ID=${cellLog.cellId}, RSSI=${cellLog.rssi}dBm")
         } else {
             // This might be a debug circle, show basic info
-            Toast.makeText(this, "デバッグ用サークル（カバレッジ推定）", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_debug_circle), Toast.LENGTH_SHORT).show()
         }
     }
     
@@ -934,10 +963,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menu?.add(0, 1, 0, "デバッグサークル切替")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 2, 0, "サンプルデータ追加")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 3, 0, "建物表示切替")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 4, 0, "全ログ削除")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 1, 0, getString(R.string.menu_toggle_debug_circles))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 2, 0, getString(R.string.menu_add_sample_data))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 3, 0, getString(R.string.menu_toggle_buildings))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 4, 0, getString(R.string.menu_clear_all_logs))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -960,8 +989,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             3 -> {
                 // Toggle buildings visibility
                 googleMap.isBuildingsEnabled = !googleMap.isBuildingsEnabled
-                val status = if (googleMap.isBuildingsEnabled) "表示" else "非表示"
-                Toast.makeText(this, "建物レイヤー: $status", Toast.LENGTH_SHORT).show()
+                val status = if (googleMap.isBuildingsEnabled) getString(R.string.building_layer_visible) else getString(R.string.building_layer_hidden)
+                Toast.makeText(this, status, Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "Buildings layer $status")
                 true
             }
@@ -1019,14 +1048,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.d(TAG, "Sample data inserted successfully")
                 
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "テスト用サンプルデータを追加しました", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapsActivity, getString(R.string.toast_sample_data_added), Toast.LENGTH_SHORT).show()
                     updateMapData() // Refresh the map
                 }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error adding sample data: ${e.message}", e)
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "サンプルデータ追加エラー: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, getString(R.string.toast_sample_data_error, e.message), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1034,12 +1063,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun clearAllLogsWithConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("全ログ削除")
-            .setMessage("全ての基地局ログを削除しますか？この操作は元に戻せません。")
-            .setPositiveButton("全削除") { _, _ ->
+            .setTitle(getString(R.string.dialog_clear_all_title))
+            .setMessage(getString(R.string.dialog_clear_all_message))
+            .setPositiveButton(getString(R.string.dialog_clear_all_positive)) { _, _ ->
                 clearAllLogs()
             }
-            .setNegativeButton("キャンセル", null)
+            .setNegativeButton(getString(R.string.dialog_cancel), null)
             .show()
     }
 
@@ -1051,7 +1080,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 val deletedCount = cellDatabase.clearAllLogs()
                 
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "${deletedCount}件のログを削除しました", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapsActivity, getString(R.string.toast_logs_cleared, deletedCount), Toast.LENGTH_SHORT).show()
                     
                     // Reset data and refresh map
                     allCellLogs = emptyList()
@@ -1065,7 +1094,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             } catch (e: Exception) {
                 Log.e(TAG, "Error clearing logs: ${e.message}", e)
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "ログ削除エラー: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, getString(R.string.toast_logs_clear_error, e.message), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1073,6 +1102,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onStart() {
         super.onStart()
+        updateServiceButtonState()
         val filter = IntentFilter(CellFinderService.ACTION_GSM_DETECTED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(gsmAlertReceiver, filter, Context.RECEIVER_NOT_EXPORTED)

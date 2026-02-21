@@ -28,6 +28,8 @@ class CellFinderService : Service() {
         private const val TAG = "CellFinder-Service"
         const val ACTION_GSM_DETECTED = "com.example.cellfinder.GSM_DETECTED"
         const val EXTRA_GSM_CELL_INFO = "gsm_cell_info"
+        var isRunning: Boolean = false
+            private set
     }
 
     private val CHANNEL_ID = "cell_finder_channel"
@@ -49,6 +51,7 @@ class CellFinderService : Service() {
     override fun onCreate() {
         Log.i(TAG, "Service onCreate() called")
         super.onCreate()
+        isRunning = true
         telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         cellDatabase = CellDatabase(this)
         createNotificationChannel()
@@ -338,6 +341,7 @@ class CellFinderService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "Service onDestroy() called")
+        isRunning = false
         handler.removeCallbacks(logRunnable)
         Log.i(TAG, "Logging runnable stopped")
         super.onDestroy()

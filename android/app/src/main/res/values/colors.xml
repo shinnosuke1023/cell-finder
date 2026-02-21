@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="stop_button_background">#F44336</color>
+    <color name="start_button_background">#4CAF50</color>
+    <color name="service_button_text">@android:color/white</color>
+</resources>

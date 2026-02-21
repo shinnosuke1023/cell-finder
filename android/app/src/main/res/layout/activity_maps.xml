@@ -48,8 +48,8 @@
             android:textSize="12sp"
             android:minWidth="0dp"
             android:paddingHorizontal="12dp"
-            android:backgroundTint="#F44336"
-            android:textColor="@android:color/white" />
+            android:backgroundTint="@color/stop_button_background"
+            android:textColor="@color/service_button_text" />
 
     </LinearLayout>
     

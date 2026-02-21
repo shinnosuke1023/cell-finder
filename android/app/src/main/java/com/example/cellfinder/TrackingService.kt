@@ -20,6 +20,9 @@ class TrackingService : Service() {
         
         // LiveData for state updates
         val estimatedPositionLiveData = MutableLiveData<TrackingState>()
+        
+        var isRunning: Boolean = false
+            private set
     }
     
     private lateinit var ekfEngine: EKFEngine
@@ -35,6 +38,7 @@ class TrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "TrackingService onCreate()")
+        isRunning = true
         
         // Initialize components
         ekfEngine = EKFEngine()
@@ -181,6 +185,7 @@ class TrackingService : Service() {
     
     override fun onDestroy() {
         Log.i(TAG, "TrackingService onDestroy()")
+        isRunning = false
         
         // Cancel tracking job
         trackingJob?.cancel()
