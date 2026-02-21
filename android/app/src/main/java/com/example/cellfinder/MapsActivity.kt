@@ -84,7 +84,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var currentDisplayMode = DisplayMode.RSSI_CIRCLES
     private var selectedCellId: String? = null
     // Follow location state
-    private lateinit var followLocationButton: Button
+    private lateinit var followLocationButton: ImageButton
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var isFollowingLocation = false
     private var initialLocationDone = false
@@ -990,20 +990,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 return
             }
             isFollowingLocation = true
-            followLocationButton.text = getString(R.string.btn_follow_on)
-            followLocationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
-                resources.getColor(R.color.follow_on_background, theme)
-            )
-            followLocationButton.setTextColor(resources.getColor(R.color.follow_on_text, theme))
+            followLocationButton.setImageResource(R.drawable.ic_my_location_filled)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_on)
             startFollowingLocation()
         } else {
             stopFollowingLocation()
             isFollowingLocation = false
-            followLocationButton.text = getString(R.string.btn_follow_off)
-            followLocationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
-                resources.getColor(R.color.follow_off_background, theme)
-            )
-            followLocationButton.setTextColor(resources.getColor(R.color.follow_off_text, theme))
+            followLocationButton.setImageResource(R.drawable.ic_my_location_outline)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_off)
         }
     }
     

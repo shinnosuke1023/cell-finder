@@ -71,21 +71,18 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <Button
+        <ImageButton
             android:id="@+id/followLocationButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_gravity="top|start"
             android:layout_margin="16dp"
-            android:text="@string/btn_follow_off"
-            android:textSize="14sp"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="10dp"
+            android:src="@drawable/ic_my_location_outline"
+            android:scaleType="centerInside"
+            android:padding="10dp"
             android:elevation="6dp"
-            android:backgroundTint="@color/follow_off_background"
-            android:textColor="@color/follow_off_text" />
+            android:background="@android:drawable/dialog_holo_light_frame"
+            android:contentDescription="@string/btn_follow_off" />
 
     </FrameLayout>
 
