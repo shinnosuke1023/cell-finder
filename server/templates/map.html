@@ -37,6 +37,8 @@
       <button onclick="updateMap(true)">Refresh</button>
 
       <label><input type="checkbox" id="debugToggle" checked onchange="toggleDebug()"> Debug Circles</label>
+
+      <button id="trackBtn" onclick="toggleTracking()" style="background:#ccc;">📍 追跡OFF</button>
     </div>
     <div id="status">Loading…</div>
     <div id="gsm-alert-banner">
@@ -60,6 +62,85 @@
     var pinLayer    = L.layerGroup().addTo(map);
     var bsLayer     = L.layerGroup().addTo(map);
     var debugLayer  = L.layerGroup().addTo(map);
+
+    /* ── Current location tracking ──────────────────────────────────────── */
+    var currentPosMarker = null;
+    var currentPosCircle = null;
+    var trackingEnabled = false;
+    var initialLocationDone = false;
+    var watchId = null;
+
+    function showCurrentPosition(lat, lon, accuracy) {
+      if (currentPosMarker) {
+        currentPosMarker.setLatLng([lat, lon]);
+      } else {
+        currentPosMarker = L.circleMarker([lat, lon], {
+          radius: 8,
+          fillColor: '#4285F4',
+          color: '#ffffff',
+          weight: 3,
+          fillOpacity: 1
+        }).addTo(map).bindPopup('現在位置');
+      }
+      if (currentPosCircle) {
+        currentPosCircle.setLatLng([lat, lon]);
+        currentPosCircle.setRadius(accuracy);
+      } else {
+        currentPosCircle = L.circle([lat, lon], {
+          radius: accuracy,
+          color: '#4285F4',
+          fillColor: '#4285F4',
+          fillOpacity: 0.12,
+          weight: 1
+        }).addTo(map);
+      }
+    }
+
+    function onLocationUpdate(pos) {
+      var lat = pos.coords.latitude;
+      var lon = pos.coords.longitude;
+      var acc = pos.coords.accuracy || 50;
+      showCurrentPosition(lat, lon, acc);
+      if (!initialLocationDone) {
+        initialLocationDone = true;
+        map.setView([lat, lon], 15);
+      }
+      if (trackingEnabled) {
+        map.setView([lat, lon]);
+      }
+    }
+
+    function onLocationError(err) {
+      console.warn('Geolocation error:', err.message);
+    }
+
+    // Start watching current position
+    if (navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(onLocationUpdate, onLocationError, {
+        enableHighAccuracy: true, maximumAge: 5000
+      });
+      window.addEventListener('beforeunload', function() {
+        if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      });
+    }
+
+    function toggleTracking() {
+      trackingEnabled = !trackingEnabled;
+      var btn = document.getElementById('trackBtn');
+      if (trackingEnabled) {
+        btn.textContent = '📍 追跡ON';
+        btn.style.background = '#4285F4';
+        btn.style.color = '#fff';
+        if (currentPosMarker) {
+          var ll = currentPosMarker.getLatLng();
+          map.setView([ll.lat, ll.lng]);
+        }
+      } else {
+        btn.textContent = '📍 追跡OFF';
+        btn.style.background = '#ccc';
+        btn.style.color = '';
+      }
+    }
 
     /* ── RSSI → colour (matches Android Blue→Cyan→Green→Yellow→Red) ──────── */
     function rssiToRgb(rssi) {
