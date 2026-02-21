@@ -26,6 +26,8 @@
     <string name="building_layer_hidden">建物レイヤー: 非表示</string>
     <string name="all_cell_ids">全セルID</string>
     <string name="all_cell_ids_count">全セルID（%1$d件）</string>
+    <string name="connected_cell_id">接続中のセル</string>
+    <string name="connected_cell_id_with_name">接続中のセル（%1$s）</string>
     <string name="cell_ids_scroll_hint">セルIDが%1$d件あります。スクロールが長くなる場合があります。</string>
     <string name="dialog_clear_all_title">全ログ削除</string>
     <string name="dialog_clear_all_message">全ての基地局ログを削除しますか？この操作は元に戻せません。</string>
