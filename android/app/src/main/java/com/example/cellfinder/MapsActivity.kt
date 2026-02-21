@@ -314,7 +314,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         // Configure map
         googleMap.uiSettings.isZoomControlsEnabled = true
-        googleMap.uiSettings.isMyLocationButtonEnabled = true
+        googleMap.uiSettings.isMyLocationButtonEnabled = false
         
         // Disable buildings layer for better heatmap visibility
         googleMap.isBuildingsEnabled = false
@@ -330,7 +330,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 stopFollowingLocation()
                 isFollowingLocation = false
                 followLocationButton.setImageResource(R.drawable.ic_my_location_outline)
-                followLocationButton.contentDescription = getString(R.string.btn_follow_off)
+                followLocationButton.contentDescription = getString(R.string.btn_follow_off_description)
                 Log.d(TAG, "Follow mode disabled by user gesture")
             }
         }
@@ -1002,13 +1002,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
             isFollowingLocation = true
             followLocationButton.setImageResource(R.drawable.ic_my_location_filled)
-            followLocationButton.contentDescription = getString(R.string.btn_follow_on)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_on_description)
             startFollowingLocation()
         } else {
             stopFollowingLocation()
             isFollowingLocation = false
             followLocationButton.setImageResource(R.drawable.ic_my_location_outline)
-            followLocationButton.contentDescription = getString(R.string.btn_follow_off)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_off_description)
         }
     }
     
@@ -1064,7 +1064,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             displayModeMenu?.add(1, 100 + index, index, mode.displayName)
         }
         displayModeMenu?.setGroupCheckable(1, true, true)
-        displayModeMenu?.findItem(100)?.isChecked = true  // Default: RSSI_CIRCLES
+        val selectedItemId = 100 + DisplayMode.values().indexOf(currentDisplayMode)
+        displayModeMenu?.findItem(selectedItemId)?.isChecked = true
 
         menu?.add(0, 1, 1, getString(R.string.menu_toggle_debug_circles))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         menu?.add(0, 2, 2, getString(R.string.menu_add_sample_data))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
@@ -1234,7 +1235,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onStop() {
         Log.d(TAG, "MapsActivity onStop")
         // Stop location updates to save battery while in background
-        if (isFollowingLocation) {
+        if (isFollowingLocation && ::fusedLocationClient.isInitialized) {
             locationCallback?.let {
                 fusedLocationClient.removeLocationUpdates(it)
             }
@@ -1268,7 +1269,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onDestroy() {
         Log.d(TAG, "MapsActivity onDestroy")
-        stopFollowingLocation()
+        if (::fusedLocationClient.isInitialized) {
+            stopFollowingLocation()
+        }
         handler.removeCallbacksAndMessages(null)
         backgroundExecutor.shutdown()
         super.onDestroy()

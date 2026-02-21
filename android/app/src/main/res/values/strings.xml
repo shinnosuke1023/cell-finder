@@ -48,6 +48,8 @@
     <string name="toast_debug_circle">デバッグ用サークル（カバレッジ推定）</string>
     <string name="btn_follow_on">📍 追跡ON</string>
     <string name="btn_follow_off">📍 追跡OFF</string>
+    <string name="btn_follow_on_description">位置追跡を無効にする</string>
+    <string name="btn_follow_off_description">位置追跡を有効にする</string>
     <string name="menu_display_mode">表示モード</string>
     <string name="services_started">サービスを開始しました</string>
     <string name="services_stopped">サービスを停止しました</string>

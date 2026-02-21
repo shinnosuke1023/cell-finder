@@ -75,15 +75,15 @@
             android:id="@+id/followLocationButton"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_gravity="top|start"
-            android:layout_marginStart="8dp"
+            android:layout_gravity="top|end"
+            android:layout_marginEnd="8dp"
             android:layout_marginTop="8dp"
             android:src="@drawable/ic_my_location_outline"
             android:scaleType="centerInside"
             android:padding="10dp"
             android:elevation="6dp"
             android:background="@android:drawable/dialog_holo_light_frame"
-            android:contentDescription="@string/btn_follow_off" />
+            android:contentDescription="@string/btn_follow_off_description" />
 
     </FrameLayout>
 
