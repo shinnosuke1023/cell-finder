@@ -41,6 +41,15 @@
             android:paddingHorizontal="12dp" />
 
         <Button
+            android:id="@+id/followLocationButton"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:text="@string/btn_follow_off"
+            android:textSize="12sp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="12dp" />
+
+        <Button
             android:id="@+id/stopServicesButton"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
