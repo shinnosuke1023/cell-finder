@@ -28,7 +28,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
     companion object {
         private const val TAG = "CellDatabase"
         private const val DATABASE_NAME = "cell_finder.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 3
         
         private const val TABLE_LOGS = "logs"
         private const val COLUMN_ID = "id"
@@ -38,6 +38,11 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         private const val COLUMN_TYPE = "type"
         private const val COLUMN_RSSI = "rssi"
         private const val COLUMN_CELL_ID = "cell_id"
+        private const val COLUMN_SYNCED = "synced"
+        private const val INDEX_SYNCED_TIMESTAMP = "idx_logs_synced_timestamp"
+
+        // Unsynced records older than this are purged regardless of the normal retention window
+        private const val MAX_UNSYNCED_AGE_MS = 7L * 24 * 60 * 60 * 1000 // 7 days
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -50,17 +55,27 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
                 $COLUMN_LON REAL,
                 $COLUMN_TYPE TEXT,
                 $COLUMN_RSSI INTEGER,
-                $COLUMN_CELL_ID TEXT
+                $COLUMN_CELL_ID TEXT,
+                $COLUMN_SYNCED INTEGER DEFAULT 0
             )
         """.trimIndent()
         db.execSQL(createTableQuery)
+        db.execSQL(
+            "CREATE INDEX $INDEX_SYNCED_TIMESTAMP ON $TABLE_LOGS ($COLUMN_SYNCED, $COLUMN_TIMESTAMP)"
+        )
         Log.d(TAG, "Database tables created successfully")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         Log.d(TAG, "Upgrading database from version $oldVersion to $newVersion")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_LOGS")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE $TABLE_LOGS ADD COLUMN $COLUMN_SYNCED INTEGER DEFAULT 0")
+        }
+        if (oldVersion < 3) {
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS $INDEX_SYNCED_TIMESTAMP ON $TABLE_LOGS ($COLUMN_SYNCED, $COLUMN_TIMESTAMP)"
+            )
+        }
     }
 
     fun insertCellLog(cellLog: CellLog): Long {
@@ -72,6 +87,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
             put(COLUMN_TYPE, cellLog.type)
             put(COLUMN_RSSI, cellLog.rssi)
             put(COLUMN_CELL_ID, cellLog.cellId)
+            put(COLUMN_SYNCED, 0)
         }
         
         val id = db.insert(TABLE_LOGS, null, values)
@@ -79,8 +95,9 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         return id
     }
 
-    fun insertCellLogs(cellLogs: List<CellLog>) {
+    fun insertCellLogs(cellLogs: List<CellLog>): List<Long> {
         val db = writableDatabase
+        val ids = mutableListOf<Long>()
         db.beginTransaction()
         try {
             cellLogs.forEach { cellLog ->
@@ -91,13 +108,72 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
                     put(COLUMN_TYPE, cellLog.type)
                     put(COLUMN_RSSI, cellLog.rssi)
                     put(COLUMN_CELL_ID, cellLog.cellId)
+                    put(COLUMN_SYNCED, 0)
                 }
-                db.insert(TABLE_LOGS, null, values)
+                val newId = db.insert(TABLE_LOGS, null, values)
+                if (newId == -1L) {
+                    throw IllegalStateException("db.insert returned -1 for cellLog: $cellLog")
+                }
+                ids.add(newId)
             }
             db.setTransactionSuccessful()
             Log.d(TAG, "Inserted ${cellLogs.size} cell logs")
+        } catch (e: Exception) {
+            // Transaction will be rolled back by endTransaction(); ids collected so far are invalid.
+            Log.e(TAG, "Transaction failed after ${ids.size} insert(s), rolling back: ${e.message}", e)
+            return emptyList()
         } finally {
             db.endTransaction()
+        }
+        return ids
+    }
+
+    fun getUnsyncedLogs(limit: Int = 100): List<Pair<Long, CellLog>> {
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_LOGS,
+            null,
+            "$COLUMN_SYNCED = 0",
+            null, null, null,
+            "$COLUMN_TIMESTAMP ASC",
+            limit.toString()
+        )
+        val logs = mutableListOf<Pair<Long, CellLog>>()
+        cursor.use {
+            while (it.moveToNext()) {
+                val id = it.getLong(it.getColumnIndexOrThrow(COLUMN_ID))
+                val cellLog = CellLog(
+                    timestamp = it.getLong(it.getColumnIndexOrThrow(COLUMN_TIMESTAMP)),
+                    lat = if (it.isNull(it.getColumnIndexOrThrow(COLUMN_LAT))) null
+                          else it.getDouble(it.getColumnIndexOrThrow(COLUMN_LAT)),
+                    lon = if (it.isNull(it.getColumnIndexOrThrow(COLUMN_LON))) null
+                          else it.getDouble(it.getColumnIndexOrThrow(COLUMN_LON)),
+                    type = it.getString(it.getColumnIndexOrThrow(COLUMN_TYPE)),
+                    rssi = if (it.isNull(it.getColumnIndexOrThrow(COLUMN_RSSI))) null
+                           else it.getInt(it.getColumnIndexOrThrow(COLUMN_RSSI)),
+                    cellId = it.getString(it.getColumnIndexOrThrow(COLUMN_CELL_ID))
+                )
+                logs.add(Pair(id, cellLog))
+            }
+        }
+        Log.d(TAG, "Retrieved ${logs.size} unsynced cell logs")
+        return logs
+    }
+
+    fun markAsSynced(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val db = writableDatabase
+        val placeholders = ids.joinToString(",") { "?" }
+        val values = ContentValues().apply { put(COLUMN_SYNCED, 1) }
+        val updated = db.update(
+            TABLE_LOGS,
+            values,
+            "$COLUMN_ID IN ($placeholders)",
+            ids.map { it.toString() }.toTypedArray()
+        )
+        Log.d(TAG, "Marked $updated records as synced")
+        if (updated != ids.size) {
+            Log.w(TAG, "markAsSynced: updated row count ($updated) does not match ID count (${ids.size})")
         }
     }
 
@@ -145,8 +221,22 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
     fun clearOldData(retentionHours: Int = 24) {
         val cutoffTime = System.currentTimeMillis() - (retentionHours * 60 * 60 * 1000)
         val db = writableDatabase
-        val deletedRows = db.delete(TABLE_LOGS, "$COLUMN_TIMESTAMP < ?", arrayOf(cutoffTime.toString()))
-        Log.d(TAG, "Cleared $deletedRows old records")
+        // Only delete synced records within the normal retention window (retentionHours, default 24 h).
+        // Unsynced records in that same window are kept so they can still be retried.
+        val deletedRows = db.delete(
+            TABLE_LOGS,
+            "$COLUMN_TIMESTAMP < ? AND $COLUMN_SYNCED = 1",
+            arrayOf(cutoffTime.toString())
+        )
+        // Also purge very old unsynced records (> MAX_UNSYNCED_AGE_MS) to prevent unbounded DB
+        // growth if records never successfully sync due to persistent network issues.
+        val unsyncedCutoffTime = System.currentTimeMillis() - MAX_UNSYNCED_AGE_MS
+        val deletedUnsynced = db.delete(
+            TABLE_LOGS,
+            "$COLUMN_TIMESTAMP < ? AND $COLUMN_SYNCED = 0",
+            arrayOf(unsyncedCutoffTime.toString())
+        )
+        Log.d(TAG, "Cleared $deletedRows old synced records and $deletedUnsynced old unsynced records")
     }
     
     fun clearAllLogs(): Int {

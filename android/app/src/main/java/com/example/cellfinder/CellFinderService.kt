@@ -21,6 +21,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.util.Collections
 import android.util.Log
 
 class CellFinderService : Service() {
@@ -43,10 +44,14 @@ class CellFinderService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val client = OkHttpClient()
     private val gson = Gson()
+    private val pendingSyncIds: MutableSet<Long> = Collections.synchronizedSet(mutableSetOf())
+    @Volatile private var destroyed = false
 
     // --- ここを実行環境に合わせて変えてください ---
     private val SERVER_URL = "https://cell-finder-app-hhb9eyhjh3dyfwfg.japaneast-01.azurewebsites.net/log"
     private val POLL_INTERVAL_MS: Long = 5000
+    private val RETRY_INTERVAL_MS: Long = 30_000
+    private val RETRY_BATCH_SIZE = 100
 
     override fun onCreate() {
         Log.i(TAG, "Service onCreate() called")
@@ -59,6 +64,7 @@ class CellFinderService : Service() {
         Log.i(TAG, "Service started in foreground with notification")
         handler.post(logRunnable)
         Log.i(TAG, "Logging runnable started with interval: ${POLL_INTERVAL_MS}ms")
+        handler.postDelayed(retryRunnable, RETRY_INTERVAL_MS)
         
         // Clean up old data periodically (keep last 24 hours)
         cellDatabase.clearOldData(24)
@@ -69,6 +75,54 @@ class CellFinderService : Service() {
             Log.d(TAG, "logRunnable executing...")
             sampleAndSend()
             handler.postDelayed(this, POLL_INTERVAL_MS)
+        }
+    }
+
+    private val retryRunnable = object : Runnable {
+        override fun run() {
+            retryUnsyncedLogs()
+            handler.postDelayed(this, RETRY_INTERVAL_MS)
+        }
+    }
+
+    private fun retryUnsyncedLogs() {
+        val unsyncedLogs = cellDatabase.getUnsyncedLogs(RETRY_BATCH_SIZE)
+            .filter { (id, _) -> id !in pendingSyncIds }
+        if (unsyncedLogs.isEmpty()) return
+        Log.d(TAG, "Retrying ${unsyncedLogs.size} unsynced logs")
+
+        // Group by (timestamp, lat, lon) to better approximate original sampling batches.
+        // NOTE: This is an approximation — records sharing the same (timestamp, lat, lon) are
+        // assumed to originate from the same sampling event. Logs with null lat/lon will all fall
+        // into a single batch. A future improvement would be to store an explicit batchId column.
+        unsyncedLogs.groupBy { (_, log) -> Triple(log.timestamp, log.lat, log.lon) }
+            .forEach { (_, logsForBatch) ->
+            val firstLog = logsForBatch.first().second
+            if (firstLog.lat == null || firstLog.lon == null) {
+                Log.w(TAG, "Retrying ${logsForBatch.size} log(s) without location data (lat/lon is null)")
+            }
+            val cells = logsForBatch.map { (_, cellLog) ->
+                mapOf(
+                    "type" to cellLog.type,
+                    "rssi" to cellLog.rssi,
+                    "cell_id" to cellLog.cellId,
+                    // hasIdentity is a derived field that can be reconstructed from cell_id
+                    "hasIdentity" to (cellLog.cellId != null)
+                )
+            }
+            // NOTE: simState, foundGsmType, and anyTypeKnown are not stored in the DB schema
+            // and therefore use conservative defaults on retry.
+            val payload = mapOf(
+                "timestamp" to firstLog.timestamp,
+                "lat" to firstLog.lat,
+                "lon" to firstLog.lon,
+                "simState" to null,
+                "foundGsmType" to false,
+                "anyTypeKnown" to false,
+                "cells" to cells
+            )
+            val ids = logsForBatch.map { it.first }
+            sendJson(payload, ids)
         }
     }
 
@@ -159,17 +213,17 @@ class CellFinderService : Service() {
             }
             
             // Store data locally
-            storeDataLocally(payload, cells)
+            val logIds = storeDataLocally(payload, cells)
             
             // Also send to server if configured
-            sendJson(payload)
+            sendJson(payload, logIds)
         }.addOnFailureListener { e ->
             Log.e(TAG, "Failed to get location: ${e.message}")
         }
     }
 
-    private fun storeDataLocally(payload: Map<String, Any?>, cells: List<Map<String, Any?>>) {
-        try {
+    private fun storeDataLocally(payload: Map<String, Any?>, cells: List<Map<String, Any?>>): List<Long> {
+        return try {
             val timestamp = payload["timestamp"] as? Long ?: System.currentTimeMillis()
             val lat = payload["lat"] as? Double
             val lon = payload["lon"] as? Double
@@ -188,12 +242,21 @@ class CellFinderService : Service() {
             }
             
             if (cellLogs.isNotEmpty()) {
-                cellDatabase.insertCellLogs(cellLogs)
-                Log.d(TAG, "Stored ${cellLogs.size} cell logs locally")
+                val ids = cellDatabase.insertCellLogs(cellLogs)
+                if (ids.isEmpty()) {
+                    Log.w(TAG, "DB insert returned no IDs for ${cellLogs.size} cell log(s); " +
+                        "data will still be attempted to server but cannot be retried if the request fails")
+                } else {
+                    Log.d(TAG, "Stored ${cellLogs.size} cell logs locally")
+                }
+                ids
+            } else {
+                emptyList()
             }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error storing data locally: ${e.message}", e)
+            emptyList()
         }
     }
 
@@ -257,7 +320,11 @@ class CellFinderService : Service() {
         }
     }
 
-    private fun sendJson(data: Any) {
+    private fun sendJson(data: Any, logIds: List<Long> = emptyList()) {
+        // Register IDs as in-flight before the request so the catch block can always remove them
+        if (logIds.isNotEmpty()) {
+            pendingSyncIds.addAll(logIds)
+        }
         try {
             val json = gson.toJson(data)
             Log.d(TAG, "Sending JSON to $SERVER_URL")
@@ -269,17 +336,25 @@ class CellFinderService : Service() {
             client.newCall(req).enqueue(object: Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     Log.e(TAG, "HTTP request failed: ${e.message}")
+                    handler.post { pendingSyncIds.removeAll(logIds.toSet()) }
                 }
                 override fun onResponse(call: Call, response: Response) {
-                    Log.d(TAG, "HTTP response: ${response.code} ${response.message}")
-                    if (!response.isSuccessful) {
-                        Log.w(TAG, "Server returned error: ${response.code}")
-                    }
+                    val code = response.code
+                    Log.d(TAG, "HTTP response: $code ${response.message}")
+                    val successful = response.isSuccessful
+                    if (!successful) Log.w(TAG, "Server returned error: $code")
                     response.close()
+                    handler.post {
+                        if (!destroyed && successful && logIds.isNotEmpty()) {
+                            cellDatabase.markAsSynced(logIds)
+                        }
+                        pendingSyncIds.removeAll(logIds.toSet())
+                    }
                 }
             })
         } catch (e: Exception) {
             Log.e(TAG, "Error in sendJson: ${e.message}", e)
+            pendingSyncIds.removeAll(logIds.toSet())
         }
     }
 
@@ -342,8 +417,23 @@ class CellFinderService : Service() {
     override fun onDestroy() {
         Log.i(TAG, "Service onDestroy() called")
         isRunning = false
+        destroyed = true
         handler.removeCallbacks(logRunnable)
+        handler.removeCallbacks(retryRunnable)
         Log.i(TAG, "Logging runnable stopped")
+        try {
+            client.dispatcher.cancelAll()
+            pendingSyncIds.clear()
+            Log.i(TAG, "All in-flight HTTP requests cancelled and pendingSyncIds cleared")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cancel in-flight HTTP requests", e)
+        }
+        try {
+            cellDatabase.close()
+            Log.i(TAG, "CellDatabase connection closed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to close CellDatabase", e)
+        }
         super.onDestroy()
     }
 
