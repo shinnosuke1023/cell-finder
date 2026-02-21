@@ -1010,7 +1010,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     val mnc = call("getMncString") ?: call("getMnc")
                     if (nci != null) {
                         "NR:${mcc}-${mnc}:${tac}-${nci}"
-                    } else null
+                    } else {
+                        "NR:${nrId.toString()}"
+                    }
                 }
                 else -> null
             }
@@ -1026,10 +1028,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         Log.d(TAG, "Connected cell ID updated: $previousCellId -> $newCellId")
         
         // If the connected cell changed and user has "connected cell" filter selected,
-        // refresh the visualization and spinner to reflect the change
+        // refresh the spinner; its selection callback will update the visualization
         if (previousCellId != newCellId && selectedCellId == CONNECTED_CELL_MARKER) {
             updateCellIdSpinner()
-            updateMapVisualization()
         }
     }
 
