@@ -10,7 +10,7 @@
     <string name="btn_stop">停止</string>
     <string name="btn_open_map">マップを開く</string>
     <string name="btn_refresh">更新</string>
-    <string name="label_app_description">基地局ロガー &amp; EKFトラッキング</string>
+    <string name="label_app_description">基地局特定・位置推定</string>
     <string name="label_unknown">不明</string>
     <string name="map_title">基地局ヒートマップ</string>
     <string name="no_cell_info">現在のセル情報なし</string>
