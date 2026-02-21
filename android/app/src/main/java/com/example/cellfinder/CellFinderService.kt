@@ -2,6 +2,7 @@ package com.example.cellfinder
 
 import android.app.*
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -299,10 +300,10 @@ class CellFinderService : Service() {
 
         val gsmAlertChannel = NotificationChannel(
             GSM_ALERT_CHANNEL_ID,
-            "GSM Alert",
+            "GSMアラート",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Alerts when a GSM (2G) connection is detected"
+            description = "GSM（2G）接続が検出された場合にアラートを通知します"
             enableVibration(true)
         }
         nm.createNotificationChannel(gsmAlertChannel)
@@ -310,6 +311,12 @@ class CellFinderService : Service() {
     }
 
     private fun sendGsmAlertNotification() {
+        // On Android 13+ (TIRAMISU), POST_NOTIFICATIONS permission is required
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "POST_NOTIFICATIONS permission not granted, skipping notification")
+            return
+        }
         val intent = Intent(this, MainActivity::class.java)
         val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, GSM_ALERT_CHANNEL_ID)
