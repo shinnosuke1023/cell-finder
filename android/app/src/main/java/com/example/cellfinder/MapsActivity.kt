@@ -55,6 +55,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var displayModeSpinner: Spinner
     private lateinit var refreshButton: Button
     private lateinit var stopServicesButton: Button
+    private lateinit var currentCellInfoTextView: TextView
     
     // Map elements
     private val cellMarkers = mutableListOf<Marker>()
@@ -80,6 +81,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     // Service running state
     private var servicesRunning = true
     private var isGsmAlertShowing = false
+    private var hasShownScrollHint = false
 
     private val gsmAlertReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -225,6 +227,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         displayModeSpinner = findViewById(R.id.displayModeSpinner)
         refreshButton = findViewById(R.id.refreshButton)
         stopServicesButton = findViewById(R.id.stopServicesButton)
+        currentCellInfoTextView = findViewById(R.id.currentCellInfo)
         
         // Setup display mode spinner
         val displayModes = DisplayMode.values().map { it.displayName }
@@ -384,6 +387,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     updateCellIdSpinner()
                     updateMapVisualization()
                     updateBaseStationMarkers(estimatedPositions)
+                    updateCurrentCellInfo()
                 }
                 
             } catch (e: Exception) {
@@ -434,8 +438,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             Toast.makeText(this, getString(R.string.toast_cell_id_filter_error, e.message), Toast.LENGTH_LONG).show()
         }
         
-        // If there are many cell IDs, show a toast to inform user
-        if (allCellIds.size > 50) {
+        // If there are many cell IDs, show a toast to inform user (only once)
+        if (allCellIds.size > 50 && !hasShownScrollHint) {
+            hasShownScrollHint = true
             handler.post {
                 Toast.makeText(this@MapsActivity, 
                     getString(R.string.cell_ids_scroll_hint, allCellIds.size), 
@@ -487,7 +492,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Don't auto-fit camera on updates to preserve user's view
         if (filteredLogs.isEmpty()) {
             Log.w(TAG, "No data to display on map")
-            Toast.makeText(this@MapsActivity, getString(R.string.toast_no_data), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -498,7 +502,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val rssiValues = cellLogs.mapNotNull { it.rssi }
         if (rssiValues.isEmpty()) {
             Log.w(TAG, "No valid RSSI values found")
-            Toast.makeText(this@MapsActivity, getString(R.string.toast_no_rssi_data), Toast.LENGTH_SHORT).show()
             return
         }
         
@@ -600,17 +603,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.d(TAG, "- Mapping range: -120dBm to -20dBm")
                 Log.d(TAG, "- Gradient: Blue(-120dBm) -> Red(-20dBm)")
                 
-                Toast.makeText(this@MapsActivity, 
-                    "RSSI Heatmap: ${heatmapData.size} points (${minRssi} to ${maxRssi} dBm)", 
-                    Toast.LENGTH_SHORT).show()
-                
             } catch (e: Exception) {
                 Log.e(TAG, "Error creating RSSI-based heatmap: ${e.message}", e)
-                Toast.makeText(this@MapsActivity, getString(R.string.toast_heatmap_error, e.message), Toast.LENGTH_LONG).show()
             }
         } else {
             Log.w(TAG, "No valid data points for RSSI-based heatmap")
-            Toast.makeText(this@MapsActivity, getString(R.string.toast_no_valid_data), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -678,10 +675,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         Log.d(TAG, "Successfully created ${rssiCircles.size} RSSI circles")
         Log.d(TAG, "RSSI->Color samples: ${rssiSamples.joinToString { "(${it.first}dBm)" }}")
         Log.d(TAG, "RSSI range: ${weakestRssi}dBm to ${strongestRssi}dBm")
-        
-        Toast.makeText(this@MapsActivity, 
-            "RSSI Circles: ${rssiCircles.size} points (${weakestRssi} to ${strongestRssi} dBm)", 
-            Toast.LENGTH_SHORT).show()
     }
     
     private fun rssiToColor(rssi: Int): Int {
@@ -879,6 +872,65 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
     
+    private fun updateCurrentCellInfo() {
+        // Check permissions
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != 
+            PackageManager.PERMISSION_GRANTED) {
+            currentCellInfoTextView.visibility = android.view.View.GONE
+            return
+        }
+        
+        try {
+            val telephonyManager = getSystemService(TELEPHONY_SERVICE) as? TelephonyManager
+            val cellInfo = telephonyManager?.allCellInfo
+            
+            if (cellInfo.isNullOrEmpty()) {
+                currentCellInfoTextView.text = getString(R.string.no_cell_info)
+                currentCellInfoTextView.visibility = android.view.View.VISIBLE
+                return
+            }
+            
+            // Find the registered (connected) cell
+            val connectedCell = cellInfo.firstOrNull { it.isRegistered }
+            
+            if (connectedCell != null) {
+                val cellDetails = when (connectedCell) {
+                    is android.telephony.CellInfoGsm -> {
+                        val identity = connectedCell.cellIdentity
+                        val signal = connectedCell.cellSignalStrength
+                        "GSM - CID: ${identity.cid}, RSSI: ${signal.dbm} dBm"
+                    }
+                    is android.telephony.CellInfoWcdma -> {
+                        val identity = connectedCell.cellIdentity
+                        val signal = connectedCell.cellSignalStrength
+                        "WCDMA - CID: ${identity.cid}, RSSI: ${signal.dbm} dBm"
+                    }
+                    is android.telephony.CellInfoLte -> {
+                        val identity = connectedCell.cellIdentity
+                        val signal = connectedCell.cellSignalStrength
+                        "LTE - CI: ${identity.ci}, RSRP: ${signal.dbm} dBm"
+                    }
+                    is android.telephony.CellInfoNr -> {
+                        val identity = connectedCell.cellIdentity as android.telephony.CellIdentityNr
+                        val signal = connectedCell.cellSignalStrength as android.telephony.CellSignalStrengthNr
+                        "5G NR - NCI: ${identity.nci}, SS-RSRP: ${signal.dbm} dBm"
+                    }
+                    else -> getString(R.string.cell_type_unknown)
+                }
+                
+                currentCellInfoTextView.text = getString(R.string.cell_connected, cellDetails)
+                currentCellInfoTextView.visibility = android.view.View.VISIBLE
+            } else {
+                currentCellInfoTextView.text = getString(R.string.cell_not_connected, cellInfo.size)
+                currentCellInfoTextView.visibility = android.view.View.VISIBLE
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting current cell info: ${e.message}", e)
+            currentCellInfoTextView.text = getString(R.string.cell_info_error)
+            currentCellInfoTextView.visibility = android.view.View.VISIBLE
+        }
+    }
 
     private fun fitCameraToData(cellLogs: List<CellLog>) {
         val validLogs = cellLogs.filter { it.lat != null && it.lon != null }

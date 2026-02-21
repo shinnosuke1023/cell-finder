@@ -13,6 +13,11 @@
     <string name="label_app_description">基地局ロガー &amp; EKFトラッキング</string>
     <string name="label_unknown">不明</string>
     <string name="map_title">基地局ヒートマップ</string>
+    <string name="no_cell_info">現在のセル情報なし</string>
+    <string name="cell_type_unknown">不明なセル種別</string>
+    <string name="cell_connected">📱 接続中: %1$s</string>
+    <string name="cell_not_connected">接続中のセルなし（%1$d件検出）</string>
+    <string name="cell_info_error">セル情報の取得に失敗</string>
     <string name="menu_toggle_debug_circles">デバッグサークル切替</string>
     <string name="menu_add_sample_data">サンプルデータ追加</string>
     <string name="menu_toggle_buildings">建物表示切替</string>
