@@ -1,16 +1,29 @@
-CellFinder project
-Android app (Kotlin) + Flask server sample.
-Build Android app with Android Studio; edit SERVER_URL in CellFinderService.kt to point to your server IP.
-Start server: python server.py
-Open http://<server_ip>:5000/map to see markers.
+# CellFinder
 
-## Local Development
+CellFinder は、Android スマートフォンで周辺の携帯基地局（セルタワー）の電波情報を収集し、基地局の位置を推定・可視化するシステムです。
+
+## 概要
+
+- **Android アプリ (Kotlin)**: バックグラウンドで GSM / WCDMA / LTE / 5G NR の基地局情報（セル ID・RSSI）と GPS 位置情報を定期収集し、サーバーへ送信します。拡張カルマンフィルタ (EKF) による高精度な位置推定エンジンも搭載しています。
+- **Flask サーバー (Python)**: 受信した観測データを SQLite に保存し、RSSI→距離変換と円交点アルゴリズムで基地局位置を推定します。Leaflet.js ベースの Web 地図でヒートマップやピン表示を提供します。
+
+## 主な機能
+
+| 機能 | 説明 |
+|------|------|
+| マルチテクノロジー対応 | GSM / WCDMA / LTE / 5G NR の基地局を検出 |
+| 基地局位置推定 | RSSI ベースの対数距離モデルと円交点クラスタリングで基地局位置を三角測量 |
+| EKF エンジン | 拡張カルマンフィルタによる高精度な位置・パスロス推定 |
+| Web 地図可視化 | ヒートマップ / ピン表示モードを切り替え可能 |
+| 2 層データベース | リアルタイム DB（直近 3 時間）とアーカイブ DB（長期保存）の自動ローテーション |
+
+## ローカル開発
 
 ```bash
 cd server
 pip install -r requirements.txt
 python server.py
-# Open http://localhost:5000/map
+# ブラウザで http://localhost:5000/map を開く
 ```
 
 ## Azure App Service デプロイ手順
