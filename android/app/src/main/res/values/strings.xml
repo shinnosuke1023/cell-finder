@@ -11,8 +11,8 @@
     <string name="btn_open_map">マップを開く</string>
     <string name="btn_refresh">更新</string>
     <string name="label_app_description">基地局ロガー &amp; EKFトラッキング</string>
+    <string name="label_unknown">不明</string>
     <string name="map_title">基地局ヒートマップ</string>
-    <string name="no_cell_info">現在のセル情報なし</string>
     <string name="menu_toggle_debug_circles">デバッグサークル切替</string>
     <string name="menu_add_sample_data">サンプルデータ追加</string>
     <string name="menu_toggle_buildings">建物表示切替</string>
@@ -26,6 +26,10 @@
     <string name="dialog_clear_all_message">全ての基地局ログを削除しますか？この操作は元に戻せません。</string>
     <string name="dialog_clear_all_positive">全削除</string>
     <string name="dialog_cancel">キャンセル</string>
+    <string name="dialog_cell_info_title">基地局情報</string>
+    <string name="dialog_cell_info_message">セルID: %1$s\n種別: %2$s\nRSSI: %3$d dBm\n\n観測位置:\n緯度: %4$.6f\n経度: %5$.6f\n\n%6$s\n\n時刻: %7$s</string>
+    <string name="dialog_cell_base_station_pos">推定基地局位置: %1$.6f, %2$.6f</string>
+    <string name="dialog_cell_no_base_station">基地局の推定位置がありません</string>
     <string name="toast_sample_data_added">テスト用サンプルデータを追加しました</string>
     <string name="toast_sample_data_error">サンプルデータ追加エラー: %1$s</string>
     <string name="toast_logs_cleared">%1$d件のログを削除しました</string>

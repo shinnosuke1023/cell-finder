@@ -55,7 +55,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var displayModeSpinner: Spinner
     private lateinit var refreshButton: Button
     private lateinit var stopServicesButton: Button
-    private lateinit var currentCellInfoTextView: TextView
     
     // Map elements
     private val cellMarkers = mutableListOf<Marker>()
@@ -226,7 +225,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         displayModeSpinner = findViewById(R.id.displayModeSpinner)
         refreshButton = findViewById(R.id.refreshButton)
         stopServicesButton = findViewById(R.id.stopServicesButton)
-        currentCellInfoTextView = findViewById(R.id.currentCellInfo)
         
         // Setup display mode spinner
         val displayModes = DisplayMode.values().map { it.displayName }
@@ -282,12 +280,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Toast.makeText(this, getString(R.string.services_started), Toast.LENGTH_SHORT).show()
                 Log.i(TAG, "All services started from map screen")
             }
-            updateServiceButtonState()
+            applyServiceButtonAppearance()
         }
     }
     
     private fun updateServiceButtonState() {
         servicesRunning = CellFinderService.isRunning || TrackingService.isRunning
+        applyServiceButtonAppearance()
+    }
+    
+    private fun applyServiceButtonAppearance() {
         if (servicesRunning) {
             stopServicesButton.text = getString(R.string.btn_stop)
             stopServicesButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
@@ -382,7 +384,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     updateCellIdSpinner()
                     updateMapVisualization()
                     updateBaseStationMarkers(estimatedPositions)
-                    updateCurrentCellInfo()
                 }
                 
             } catch (e: Exception) {
@@ -762,7 +763,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
             )
             
-            marker?.let { baseStationMarkers.add(it) }
+            marker?.let {
+                it.tag = baseStation.cellId
+                baseStationMarkers.add(it)
+            }
             
             // Add debug circles showing estimated coverage radius based on observations
             // Get all observations for this cell ID to calculate debug circles
@@ -840,35 +844,32 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val cellLog = circleMetadata[circle.id]
         
         if (cellLog != null) {
-            // Find the estimated base station for this cell ID
+            // Find the estimated base station for this cell ID using tag
             val baseStation = baseStationMarkers.find { marker ->
-                marker.snippet?.contains("Cell ID: ${cellLog.cellId}") == true
+                marker.tag == cellLog.cellId
             }
             
             val baseStationInfo = if (baseStation != null) {
                 val position = baseStation.position
-                "推定基地局位置: ${position.latitude}, ${position.longitude}"
+                getString(R.string.dialog_cell_base_station_pos, position.latitude, position.longitude)
             } else {
-                "基地局の推定位置がありません"
+                getString(R.string.dialog_cell_no_base_station)
             }
             
+            val unknown = getString(R.string.label_unknown)
             // Show detailed information in a dialog
             AlertDialog.Builder(this)
-                .setTitle("基地局情報")
-                .setMessage("""
-                    セルID: ${cellLog.cellId ?: "不明"}
-                    種別: ${cellLog.type ?: "不明"}
-                    RSSI: ${cellLog.rssi} dBm
-                    
-                    観測位置:
-                    緯度: ${cellLog.lat}
-                    経度: ${cellLog.lon}
-                    
-                    $baseStationInfo
-                    
-                    時刻: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(cellLog.timestamp))}
-                """.trimIndent())
-                .setPositiveButton("OK", null)
+                .setTitle(getString(R.string.dialog_cell_info_title))
+                .setMessage(getString(R.string.dialog_cell_info_message,
+                    cellLog.cellId ?: unknown,
+                    cellLog.type ?: unknown,
+                    cellLog.rssi ?: 0,
+                    cellLog.lat ?: 0.0,
+                    cellLog.lon ?: 0.0,
+                    baseStationInfo,
+                    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(cellLog.timestamp))
+                ))
+                .setPositiveButton(getString(R.string.gsm_alert_ok), null)
                 .show()
             
             Log.d(TAG, "Circle clicked: Cell ID=${cellLog.cellId}, RSSI=${cellLog.rssi}dBm")
@@ -878,65 +879,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
     
-    private fun updateCurrentCellInfo() {
-        // Check permissions
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != 
-            PackageManager.PERMISSION_GRANTED) {
-            currentCellInfoTextView.visibility = android.view.View.GONE
-            return
-        }
-        
-        try {
-            val telephonyManager = getSystemService(TELEPHONY_SERVICE) as? TelephonyManager
-            val cellInfo = telephonyManager?.allCellInfo
-            
-            if (cellInfo.isNullOrEmpty()) {
-                currentCellInfoTextView.text = "現在のセル情報がありません"
-                currentCellInfoTextView.visibility = android.view.View.VISIBLE
-                return
-            }
-            
-            // Find the registered (connected) cell
-            val connectedCell = cellInfo.firstOrNull { it.isRegistered }
-            
-            if (connectedCell != null) {
-                val cellDetails = when (connectedCell) {
-                    is android.telephony.CellInfoGsm -> {
-                        val identity = connectedCell.cellIdentity
-                        val signal = connectedCell.cellSignalStrength
-                        "GSM - CID: ${identity.cid}, RSSI: ${signal.dbm} dBm"
-                    }
-                    is android.telephony.CellInfoWcdma -> {
-                        val identity = connectedCell.cellIdentity
-                        val signal = connectedCell.cellSignalStrength
-                        "WCDMA - CID: ${identity.cid}, RSSI: ${signal.dbm} dBm"
-                    }
-                    is android.telephony.CellInfoLte -> {
-                        val identity = connectedCell.cellIdentity
-                        val signal = connectedCell.cellSignalStrength
-                        "LTE - CI: ${identity.ci}, RSRP: ${signal.dbm} dBm"
-                    }
-                    is android.telephony.CellInfoNr -> {
-                        val identity = connectedCell.cellIdentity as android.telephony.CellIdentityNr
-                        val signal = connectedCell.cellSignalStrength as android.telephony.CellSignalStrengthNr
-                        "5G NR - NCI: ${identity.nci}, SS-RSRP: ${signal.dbm} dBm"
-                    }
-                    else -> "不明なセル種別"
-                }
-                
-                currentCellInfoTextView.text = "📱 接続中: $cellDetails"
-                currentCellInfoTextView.visibility = android.view.View.VISIBLE
-            } else {
-                currentCellInfoTextView.text = "接続中のセルなし（${cellInfo.size}件検出）"
-                currentCellInfoTextView.visibility = android.view.View.VISIBLE
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting current cell info: ${e.message}", e)
-            currentCellInfoTextView.text = "セル情報の取得に失敗"
-            currentCellInfoTextView.visibility = android.view.View.VISIBLE
-        }
-    }
 
     private fun fitCameraToData(cellLogs: List<CellLog>) {
         val validLogs = cellLogs.filter { it.lat != null && it.lon != null }

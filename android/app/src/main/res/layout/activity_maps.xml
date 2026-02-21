@@ -52,20 +52,6 @@
             android:textColor="@color/service_button_text" />
 
     </LinearLayout>
-    
-    <!-- Current Cell Info Panel -->
-    <TextView
-        android:id="@+id/currentCellInfo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="8dp"
-        android:background="#EE000000"
-        android:textColor="@android:color/white"
-        android:textSize="12sp"
-        android:maxLines="2"
-        android:ellipsize="end"
-        android:text="@string/no_cell_info"
-        android:visibility="gone" />
 
     <!-- Map Fragment -->
     <fragment
