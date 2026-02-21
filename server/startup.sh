@@ -1,12 +1,11 @@
 #!/bin/bash
-# Azure App Service startup script for cell-finder server
-# Set as the startup command in: az webapp config set --startup-file "startup.sh"
+set -e
 
-# Change to the directory containing this script (works on Azure and locally)
-cd "$(dirname "$0")" || exit 1
+# Install dependencies
+pip install --quiet -r requirements.txt
 
-gunicorn \
-  --bind=0.0.0.0:8000 \
-  --timeout=120 \
-  --workers=2 \
-  wsgi:app
+# Create persistent data directory for Azure
+mkdir -p /home/data
+
+# Start gunicorn - $PORT is set by Azure App Service
+exec gunicorn --bind=0.0.0.0:${PORT:-8000} --timeout 120 --workers 2 wsgi:app
