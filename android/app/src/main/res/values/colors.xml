@@ -3,4 +3,8 @@
     <color name="stop_button_background">#F44336</color>
     <color name="start_button_background">#4CAF50</color>
     <color name="service_button_text">@android:color/white</color>
+    <color name="follow_on_background">#4285F4</color>
+    <color name="follow_off_background">#CCCCCC</color>
+    <color name="follow_on_text">@android:color/white</color>
+    <color name="follow_off_text">@android:color/black</color>
 </resources>

@@ -23,28 +23,11 @@
             android:layout_marginEnd="8dp"
             android:spinnerMode="dropdown" />
 
-        <Spinner
-            android:id="@+id/displayModeSpinner"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:spinnerMode="dropdown" />
-
         <Button
             android:id="@+id/refreshButton"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
             android:text="@string/btn_refresh"
-            android:textSize="12sp"
-            android:minWidth="0dp"
-            android:paddingHorizontal="12dp" />
-
-        <Button
-            android:id="@+id/followLocationButton"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:text="@string/btn_follow_off"
             android:textSize="12sp"
             android:minWidth="0dp"
             android:paddingHorizontal="12dp" />
@@ -76,12 +59,34 @@
         android:text="@string/no_cell_info"
         android:visibility="gone" />
 
-    <!-- Map Fragment -->
-    <fragment
-        android:id="@+id/map"
-        android:name="com.google.android.gms.maps.SupportMapFragment"
+    <!-- Map area with floating follow button -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <fragment
+            android:id="@+id/map"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <Button
+            android:id="@+id/followLocationButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="16dp"
+            android:text="@string/btn_follow_off"
+            android:textSize="12sp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
+            android:elevation="6dp"
+            android:backgroundTint="@color/follow_off_background"
+            android:textColor="@color/follow_off_text" />
+
+    </FrameLayout>
 
 </LinearLayout>
