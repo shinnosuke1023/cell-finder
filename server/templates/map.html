@@ -54,7 +54,7 @@
     var debugLayer  = L.layerGroup().addTo(map);
 
     /* ── RSSI → colour (matches Android Blue→Cyan→Green→Yellow→Red) ──────── */
-    function rssiToColor(rssi) {
+    function rssiToRgb(rssi) {
       var rssiMin = -120, rssiMax = -20;
       var n = Math.max(0, Math.min(1, (rssi - rssiMin) / (rssiMax - rssiMin)));
       var r, g, b;
@@ -71,27 +71,17 @@
         var f = (n - 0.75) / 0.25;
         r = 255; g = Math.round(255 * (1 - f)); b = 0;
       }
-      return 'rgb(' + r + ',' + g + ',' + b + ')';
+      return [r, g, b];
+    }
+
+    function rssiToColor(rssi) {
+      var c = rssiToRgb(rssi);
+      return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
     }
 
     function rssiToFillColor(rssi) {
-      var rssiMin = -120, rssiMax = -20;
-      var n = Math.max(0, Math.min(1, (rssi - rssiMin) / (rssiMax - rssiMin)));
-      var r, g, b;
-      if (n <= 0.25) {
-        var f = n / 0.25;
-        r = 0; g = Math.round(f * 255); b = 255;
-      } else if (n <= 0.5) {
-        var f = (n - 0.25) / 0.25;
-        r = 0; g = 255; b = Math.round(255 * (1 - f));
-      } else if (n <= 0.75) {
-        var f = (n - 0.5) / 0.25;
-        r = Math.round(f * 255); g = 255; b = 0;
-      } else {
-        var f = (n - 0.75) / 0.25;
-        r = 255; g = Math.round(255 * (1 - f)); b = 0;
-      }
-      return 'rgba(' + r + ',' + g + ',' + b + ',0.59)';
+      var c = rssiToRgb(rssi);
+      return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0.59)';
     }
 
     /* ── Grid bucketing (matches Android 25m grid) ───────────────────────── */
