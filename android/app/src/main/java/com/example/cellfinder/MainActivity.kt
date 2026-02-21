@@ -107,9 +107,7 @@ class MainActivity : Activity() {
         } else {
             btnStart.text = getString(R.string.btn_start)
             btnStop.isEnabled = false
-            if (statusView.text == getString(R.string.status_logging_started)) {
-                statusView.text = getString(R.string.status_logging_stopped)
-            }
+            statusView.text = getString(R.string.status_logging_stopped)
         }
         Log.d(TAG, "Button states updated: running=$running")
     }
