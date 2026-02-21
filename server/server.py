@@ -71,7 +71,41 @@ def log():
                    cell.get("cell_id")))
     db.commit()
     logger.debug("Logged %d cell records", len(cells))
+
+    # Log warning when GSM cells are detected
+    gsm_cells = [c for c in cells if c.get("type") == "GSM"]
+    if gsm_cells:
+        logger.warning(
+            "GSM ALERT: %d GSM cell(s) detected at lat=%s, lon=%s, cells=%s",
+            len(gsm_cells),
+            lat,
+            lon,
+            [c.get("cell_id") for c in gsm_cells],
+        )
+
     return jsonify({"status": "ok"})
+
+
+@app.route('/alerts')
+def alerts():
+    """Return recent GSM alerts (last 1 hour) derived from the logs table."""
+    db = get_db()
+    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    rows = db.execute(
+        "SELECT timestamp, lat, lon, rssi, cell_id FROM logs "
+        "WHERE type = 'GSM' AND timestamp > ? ORDER BY timestamp",
+        (one_hour_ago_ms,),
+    ).fetchall()
+
+    # Group GSM records by (timestamp, lat, lon)
+    grouped = {}
+    for ts, lat, lon, rssi, cell_id in rows:
+        key = (ts, lat, lon)
+        if key not in grouped:
+            grouped[key] = {"timestamp": ts, "lat": lat, "lon": lon, "gsm_cells": []}
+        grouped[key]["gsm_cells"].append({"cell_id": cell_id, "rssi": rssi})
+
+    return jsonify(list(grouped.values()))
 
 
 @app.route('/map_data')

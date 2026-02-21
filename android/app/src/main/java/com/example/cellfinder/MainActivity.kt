@@ -2,8 +2,13 @@ package com.example.cellfinder
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -17,14 +22,32 @@ class MainActivity : Activity() {
         private const val TAG = "CellFinder-MainActivity"
     }
 
-    private val PERMISSIONS = arrayOf(
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.READ_PHONE_STATE
-    )
+    private val PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.POST_NOTIFICATIONS
+        )
+    } else {
+        arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.READ_PHONE_STATE
+        )
+    }
     private val REQ_PERM = 100
     private lateinit var statusView: TextView
     private lateinit var btnTrackStart: Button
     private lateinit var btnTrackStop: Button
+    private var isGsmAlertShowing = false
+
+    private val gsmAlertReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == CellFinderService.ACTION_GSM_DETECTED) {
+                Log.w(TAG, "GSM detected broadcast received in MainActivity")
+                showGsmAlertDialog()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.d(TAG, "onCreate() called")
@@ -87,6 +110,45 @@ class MainActivity : Activity() {
         }
 
         Log.d(TAG, "onCreate() completed")
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(CellFinderService.ACTION_GSM_DETECTED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(gsmAlertReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(gsmAlertReceiver, filter)
+        }
+        Log.d(TAG, "GSM alert receiver registered")
+    }
+
+    override fun onStop() {
+        Log.d(TAG, "onStop() called")
+        try {
+            unregisterReceiver(gsmAlertReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister receiver: ${e.message}")
+        }
+        isGsmAlertShowing = false
+        super.onStop()
+    }
+
+    private fun showGsmAlertDialog() {
+        if (isGsmAlertShowing) return
+        isGsmAlertShowing = true
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.gsm_alert_title))
+            .setMessage(getString(R.string.gsm_alert_message))
+            .setPositiveButton(getString(R.string.gsm_alert_ok)) { dialog, _ ->
+                dialog.dismiss()
+                isGsmAlertShowing = false
+            }
+            .setOnCancelListener {
+                isGsmAlertShowing = false
+            }
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .show()
     }
 
     private fun hasPermissions(): Boolean {

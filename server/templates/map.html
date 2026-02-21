@@ -12,6 +12,8 @@
     #controls label { margin-right: 4px; }
     #controls select, #controls button { padding: 4px 8px; margin-right: 12px; }
     #status { padding: 6px 12px; background: #e8f4f8; border-bottom: 1px solid #bee5eb; font-size: 0.9em; flex-shrink: 0; }
+    #gsm-alert-banner { display: none; padding: 10px 16px; background: #f8d7da; color: #721c24; border-bottom: 2px solid #f5c6cb; font-weight: bold; flex-shrink: 0; }
+    #gsm-alert-banner .close-btn { float: right; cursor: pointer; font-size: 1.2em; margin-left: 12px; }
     #map { flex: 1; }
   </style>
 </head>
@@ -37,6 +39,10 @@
       <label><input type="checkbox" id="debugToggle" checked onchange="toggleDebug()"> Debug Circles</label>
     </div>
     <div id="status">Loading…</div>
+    <div id="gsm-alert-banner">
+      <span class="close-btn" onclick="dismissGsmAlert()">✕</span>
+      ⚠ GSM Alert: <span id="gsm-alert-text"></span>
+    </div>
     <div id="map"></div>
   </div>
 
@@ -295,12 +301,44 @@
       }
     }
 
+    // ── GSM Alert polling ─────────────────────────────────────────────────
+    var lastAlertTimestamp = 0;
+    var dismissedAlertTimestamp = 0;
+
+    function checkGsmAlerts() {
+      fetch('/alerts')
+        .then(function(r) { return r.json(); })
+        .then(function(alerts) {
+          if (!alerts || alerts.length === 0) return;
+          var latest = alerts[alerts.length - 1];
+          if (latest.timestamp > lastAlertTimestamp && latest.timestamp > dismissedAlertTimestamp) {
+            lastAlertTimestamp = latest.timestamp;
+            var cellIds = latest.gsm_cells.map(function(c) { return c.cell_id || 'Unknown'; }).join(', ');
+            var msg = latest.gsm_cells.length + ' GSM cell(s) detected';
+            if (latest.lat != null && latest.lon != null) {
+              msg += ' at (' + Number(latest.lat).toFixed(4) + ', ' + Number(latest.lon).toFixed(4) + ')';
+            }
+            msg += ' — Cell IDs: ' + cellIds;
+            document.getElementById('gsm-alert-text').textContent = msg;
+            document.getElementById('gsm-alert-banner').style.display = 'block';
+          }
+        })
+        .catch(function(e) { console.error('alerts error', e); });
+    }
+
+    function dismissGsmAlert() {
+      dismissedAlertTimestamp = lastAlertTimestamp;
+      document.getElementById('gsm-alert-banner').style.display = 'none';
+    }
+
     // Initialise
     loadCellIds();
     updateMap(true);
+    checkGsmAlerts();
     setInterval(function() {
       loadCellIds();
       updateMap(false);
+      checkGsmAlerts();
     }, 10000);
   </script>
 </body>

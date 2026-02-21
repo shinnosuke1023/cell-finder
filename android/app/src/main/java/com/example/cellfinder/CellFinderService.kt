@@ -2,6 +2,7 @@ package com.example.cellfinder
 
 import android.app.*
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -25,9 +26,16 @@ import android.util.Log
 class CellFinderService : Service() {
     companion object {
         private const val TAG = "CellFinder-Service"
+        const val ACTION_GSM_DETECTED = "com.example.cellfinder.GSM_DETECTED"
+        const val EXTRA_GSM_CELL_INFO = "gsm_cell_info"
     }
 
     private val CHANNEL_ID = "cell_finder_channel"
+    private val GSM_ALERT_CHANNEL_ID = "gsm_alert_channel"
+    private val GSM_ALERT_NOTIFICATION_ID = 1001
+    private var lastGsmAlertTimeMs: Long = 0
+    private var wasGsmDetected: Boolean = false
+    private val GSM_ALERT_COOLDOWN_MS: Long = 60_000 // 1 minute cooldown between alerts
     private lateinit var telephonyManager: TelephonyManager
     private lateinit var cellDatabase: CellDatabase
     private val handler = Handler(Looper.getMainLooper())
@@ -132,6 +140,20 @@ class CellFinderService : Service() {
             )
 
             Log.i(TAG, "Sending payload: foundGsmType=$foundGsmType, anyTypeKnown=$anyTypeKnown, cellCount=${cells.size}")
+            
+            // GSM alert: notify user only on transition (not previously detected) or after cooldown
+            if (foundGsmType) {
+                val now = System.currentTimeMillis()
+                if (!wasGsmDetected || now - lastGsmAlertTimeMs > GSM_ALERT_COOLDOWN_MS) {
+                    Log.w(TAG, "GSM (2G) connection detected! Sending alert.")
+                    sendGsmAlertNotification()
+                    sendGsmDetectedBroadcast()
+                    lastGsmAlertTimeMs = now
+                }
+                wasGsmDetected = true
+            } else {
+                wasGsmDetected = false
+            }
             
             // Store data locally
             storeDataLocally(payload, cells)
@@ -271,11 +293,47 @@ class CellFinderService : Service() {
     }
 
     private fun createNotificationChannel() {
-        Log.d(TAG, "Creating notification channel")
+        Log.d(TAG, "Creating notification channels")
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val ch = NotificationChannel(CHANNEL_ID, "CellFinder", NotificationManager.IMPORTANCE_LOW)
         nm.createNotificationChannel(ch)
-        Log.d(TAG, "Notification channel created")
+
+        val gsmAlertChannel = NotificationChannel(
+            GSM_ALERT_CHANNEL_ID,
+            "GSMアラート",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "GSM（2G）接続が検出された場合にアラートを通知します"
+            enableVibration(true)
+        }
+        nm.createNotificationChannel(gsmAlertChannel)
+        Log.d(TAG, "Notification channels created")
+    }
+
+    private fun sendGsmAlertNotification() {
+        // On Android 13+ (TIRAMISU), POST_NOTIFICATIONS permission is required
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "POST_NOTIFICATIONS permission not granted, skipping notification")
+            return
+        }
+        val intent = Intent(this, MainActivity::class.java)
+        val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val notification = Notification.Builder(this, GSM_ALERT_CHANNEL_ID)
+            .setContentTitle(getString(R.string.gsm_notification_title))
+            .setContentText(getString(R.string.gsm_notification_text))
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(GSM_ALERT_NOTIFICATION_ID, notification)
+    }
+
+    private fun sendGsmDetectedBroadcast() {
+        val intent = Intent(ACTION_GSM_DETECTED)
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
     }
 
     override fun onDestroy() {
