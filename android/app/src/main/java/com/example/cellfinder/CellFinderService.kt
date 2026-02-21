@@ -35,7 +35,7 @@ class CellFinderService : Service() {
     private val gson = Gson()
 
     // --- ここを実行環境に合わせて変えてください ---
-    private val SERVER_URL = "http://192.168.0.17:5000/log" // ← 必ず書き換える
+    private val SERVER_URL = "https://cell-finder-app-hhb9eyhjh3dyfwfg.japaneast-01.azurewebsites.net:5000/log"
     private val POLL_INTERVAL_MS: Long = 5000
 
     override fun onCreate() {
