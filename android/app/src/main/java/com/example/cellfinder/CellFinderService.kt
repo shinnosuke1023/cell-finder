@@ -100,7 +100,6 @@ class CellFinderService : Service() {
 
             var foundGsmType = false
             var anyTypeKnown = false
-            var connectedCellId: String? = null
             val cells = cellInfo.map { ci ->
                 val type = when (ci) {
                     is CellInfoGsm -> { foundGsmType = true; anyTypeKnown = true; "GSM" }
@@ -117,12 +116,7 @@ class CellFinderService : Service() {
                     else -> null
                 }
                 val cellId = extractCellId(ci)
-                Log.d(TAG, "Cell: type=$type, dbm=$dbm, cellId=$cellId, registered=${ci.isRegistered}")
-
-                // Track the connected (registered) cell ID
-                if (ci.isRegistered && cellId != null) {
-                    connectedCellId = cellId
-                }
+                Log.d(TAG, "Cell: type=$type, dbm=$dbm, cellId=$cellId")
 
                 // completeness checks
                 val hasIdentity = cellId != null
@@ -145,7 +139,6 @@ class CellFinderService : Service() {
                 "simState" to simState,
                 "foundGsmType" to foundGsmType,
                 "anyTypeKnown" to anyTypeKnown,
-                "connected_cell_id" to connectedCellId,
                 "cells" to cells
             )
 
