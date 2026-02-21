@@ -36,8 +36,8 @@ class MainActivity : Activity() {
     }
     private val REQ_PERM = 100
     private lateinit var statusView: TextView
-    private lateinit var btnTrackStart: Button
-    private lateinit var btnTrackStop: Button
+    private lateinit var btnStart: Button
+    private lateinit var btnStop: Button
     private var isGsmAlertShowing = false
 
     private val gsmAlertReceiver = object : BroadcastReceiver() {
@@ -54,62 +54,72 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        statusView = findViewById<TextView>(R.id.statusView)
-        val btnStart = findViewById<Button>(R.id.btnStart)
-        val btnStop = findViewById<Button>(R.id.btnStop)
-        val btnMap = findViewById<Button>(R.id.btnMap)
-        btnTrackStart = findViewById<Button>(R.id.btnTrackStart)
-        btnTrackStop = findViewById<Button>(R.id.btnTrackStop)
+        statusView = findViewById(R.id.statusView)
+        btnStart = findViewById(R.id.btnStart)
+        btnStop = findViewById(R.id.btnStop)
 
         Log.d(TAG, "UI components initialized")
 
         btnStart.setOnClickListener {
-            Log.d(TAG, "Start button clicked")
-            if (!hasPermissions()) {
-                Log.w(TAG, "Permissions not granted, requesting permissions")
-                ActivityCompat.requestPermissions(this, PERMISSIONS, REQ_PERM)
+            Log.d(TAG, "Start/Map button clicked")
+            if (isServicesRunning()) {
+                Log.i(TAG, "Services already running, opening map")
+                startActivity(Intent(this, MapsActivity::class.java))
             } else {
-                Log.i(TAG, "Permissions granted, starting service")
-                updateSimStatus()
-                startService(Intent(this, CellFinderService::class.java))
-                statusView.text = getString(R.string.status_logging_started)
-                Log.i(TAG, "CellFinderService started successfully")
+                if (!hasPermissions()) {
+                    Log.w(TAG, "Permissions not granted, requesting permissions")
+                    ActivityCompat.requestPermissions(this, PERMISSIONS, REQ_PERM)
+                } else {
+                    Log.i(TAG, "Permissions granted, starting services and opening map")
+                    startServicesAndOpenMap()
+                }
             }
         }
 
         btnStop.setOnClickListener {
             Log.d(TAG, "Stop button clicked")
             stopService(Intent(this, CellFinderService::class.java))
-            statusView.text = getString(R.string.status_logging_stopped)
-            Log.i(TAG, "CellFinderService stopped")
-        }
-
-        btnMap.setOnClickListener {
-            Log.d(TAG, "Map button clicked")
-            startActivity(Intent(this, MapsActivity::class.java))
-        }
-        
-        btnTrackStart.setOnClickListener {
-            Log.d(TAG, "Track Start button clicked")
-            if (!hasPermissions()) {
-                Log.w(TAG, "Permissions not granted, requesting permissions")
-                ActivityCompat.requestPermissions(this, PERMISSIONS, REQ_PERM)
-            } else {
-                Log.i(TAG, "Permissions granted, starting tracking service")
-                startService(Intent(this, TrackingService::class.java))
-                statusView.text = "Status: EKF tracking started"
-                Log.i(TAG, "TrackingService started successfully")
-            }
-        }
-        
-        btnTrackStop.setOnClickListener {
-            Log.d(TAG, "Track Stop button clicked")
             stopService(Intent(this, TrackingService::class.java))
-            statusView.text = "Status: EKF tracking stopped"
-            Log.i(TAG, "TrackingService stopped")
+            statusView.text = getString(R.string.status_logging_stopped)
+            Log.i(TAG, "All services stopped")
+            updateButtonStates()
         }
 
         Log.d(TAG, "onCreate() completed")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume() called")
+        updateButtonStates()
+    }
+
+    private fun isServicesRunning(): Boolean {
+        return CellFinderService.isRunning || TrackingService.isRunning
+    }
+
+    private fun updateButtonStates() {
+        val running = isServicesRunning()
+        if (running) {
+            btnStart.text = getString(R.string.btn_open_map)
+            btnStop.isEnabled = true
+            statusView.text = getString(R.string.status_logging_started)
+        } else {
+            btnStart.text = getString(R.string.btn_start)
+            btnStop.isEnabled = false
+            statusView.text = getString(R.string.status_logging_stopped)
+        }
+        Log.d(TAG, "Button states updated: running=$running")
+    }
+
+    private fun startServicesAndOpenMap() {
+        updateSimStatus()
+        startService(Intent(this, CellFinderService::class.java))
+        startService(Intent(this, TrackingService::class.java))
+        statusView.text = getString(R.string.status_logging_started)
+        Log.i(TAG, "CellFinderService and TrackingService started successfully")
+        updateButtonStates()
+        startActivity(Intent(this, MapsActivity::class.java))
     }
 
     override fun onStart() {
@@ -197,11 +207,8 @@ class MainActivity : Activity() {
             }
 
             if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                Log.i(TAG, "All permissions granted, starting service")
-                updateSimStatus()
-                startService(Intent(this, CellFinderService::class.java))
-                statusView.text = getString(R.string.status_logging_started)
-                Log.i(TAG, "Service started after permission grant")
+                Log.i(TAG, "All permissions granted, starting services and opening map")
+                startServicesAndOpenMap()
             } else {
                 Log.w(TAG, "Some permissions were denied")
                 statusView.text = getString(R.string.status_permission_denied)
