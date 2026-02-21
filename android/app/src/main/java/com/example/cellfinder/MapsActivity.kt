@@ -259,6 +259,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
                 
                 Log.d(TAG, "Cell ID filter changed to: $selectedCellId")
+                // When connected cell filter is selected, refresh cell info first
+                // to get the latest connected cell ID before updating the map
+                if (selectedCellId == CONNECTED_CELL_MARKER) {
+                    updateCurrentCellInfo()
+                }
                 updateMapVisualization()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
