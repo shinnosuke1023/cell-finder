@@ -41,7 +41,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         private const val COLUMN_SYNCED = "synced"
         private const val INDEX_SYNCED_TIMESTAMP = "idx_logs_synced_timestamp"
 
-        // Unsynced records older than this are purged regardless of sync status
+        // Unsynced records older than this are purged regardless of the normal retention window
         private const val MAX_UNSYNCED_AGE_MS = 7L * 24 * 60 * 60 * 1000 // 7 days
     }
 
@@ -110,7 +110,11 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
                     put(COLUMN_CELL_ID, cellLog.cellId)
                     put(COLUMN_SYNCED, 0)
                 }
-                ids.add(db.insert(TABLE_LOGS, null, values))
+                val newId = db.insert(TABLE_LOGS, null, values)
+                if (newId == -1L) {
+                    throw IllegalStateException("db.insert returned -1 for cellLog: $cellLog")
+                }
+                ids.add(newId)
             }
             db.setTransactionSuccessful()
             Log.d(TAG, "Inserted ${cellLogs.size} cell logs")
