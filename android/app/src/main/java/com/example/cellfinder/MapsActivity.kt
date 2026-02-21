@@ -20,6 +20,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModelProvider
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
@@ -52,7 +58,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     
     // UI Components
     private lateinit var cellIdSpinner: Spinner
-    private lateinit var displayModeSpinner: Spinner
     private lateinit var refreshButton: Button
     private lateinit var stopServicesButton: Button
     private lateinit var currentCellInfoTextView: TextView
@@ -78,6 +83,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var allCellIds = listOf<String>()
     private var currentDisplayMode = DisplayMode.RSSI_CIRCLES
     private var selectedCellId: String? = null
+    // Follow location state
+    private lateinit var followLocationButton: ImageButton
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private var isFollowingLocation = false
+    private var initialLocationDone = false
+    private var locationCallback: LocationCallback? = null
+    
     // Service running state
     private var servicesRunning = true
     private var isGsmAlertShowing = false
@@ -224,24 +236,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun initializeUI() {
         cellIdSpinner = findViewById(R.id.cellIdSpinner)
-        displayModeSpinner = findViewById(R.id.displayModeSpinner)
         refreshButton = findViewById(R.id.refreshButton)
         stopServicesButton = findViewById(R.id.stopServicesButton)
         currentCellInfoTextView = findViewById(R.id.currentCellInfo)
+        followLocationButton = findViewById(R.id.followLocationButton)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         
-        // Setup display mode spinner
-        val displayModes = DisplayMode.values().map { it.displayName }
-        val displayModeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, displayModes)
-        displayModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        displayModeSpinner.adapter = displayModeAdapter
-        
-        displayModeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                currentDisplayMode = DisplayMode.values()[position]
-                updateMapVisualization()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
+        // Setup follow location button
+        followLocationButton.setOnClickListener { toggleFollowLocation() }
         
         // Setup cell ID spinner listener
         cellIdSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -312,7 +314,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         // Configure map
         googleMap.uiSettings.isZoomControlsEnabled = true
-        googleMap.uiSettings.isMyLocationButtonEnabled = true
+        googleMap.uiSettings.isMyLocationButtonEnabled = false
         
         // Disable buildings layer for better heatmap visibility
         googleMap.isBuildingsEnabled = false
@@ -322,15 +324,29 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             handleCircleClick(circle)
         }
         
+        // Disable follow mode when user manually moves the map
+        googleMap.setOnCameraMoveStartedListener { reason ->
+            if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE && isFollowingLocation) {
+                stopFollowingLocation()
+                isFollowingLocation = false
+                followLocationButton.setImageResource(R.drawable.ic_my_location_outline)
+                followLocationButton.contentDescription = getString(R.string.btn_follow_off_description)
+                Log.d(TAG, "Follow mode disabled by user gesture")
+            }
+        }
+        
         // Enable location if permitted
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == 
             PackageManager.PERMISSION_GRANTED) {
             googleMap.isMyLocationEnabled = true
         }
         
-        // Set initial camera position (Tokyo as default)
+        // Set initial camera position (Tokyo as default, then move to current location)
         val initialPosition = LatLng(TOKYO_LAT, TOKYO_LON)
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialPosition, DEFAULT_ZOOM))
+        
+        // Move to current location on first open
+        moveToCurrentLocation()
         
         // Start periodic updates
         updateMapData()
@@ -956,11 +972,105 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
+    private fun moveToCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != 
+            PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Location permission not granted, skipping initial centering")
+            return
+        }
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location ->
+                if (location != null && !initialLocationDone && ::googleMap.isInitialized) {
+                    initialLocationDone = true
+                    val currentLatLng = LatLng(location.latitude, location.longitude)
+                    googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f))
+                    Log.d(TAG, "Moved camera to current location: ${location.latitude}, ${location.longitude}")
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Failed to get current location: ${e.message}")
+            }
+    }
+    
+    private fun toggleFollowLocation() {
+        if (!isFollowingLocation) {
+            // Check permission before enabling
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != 
+                PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "Location permission not granted for follow mode")
+                return
+            }
+            isFollowingLocation = true
+            followLocationButton.setImageResource(R.drawable.ic_my_location_filled)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_on_description)
+            startFollowingLocation()
+        } else {
+            stopFollowingLocation()
+            isFollowingLocation = false
+            followLocationButton.setImageResource(R.drawable.ic_my_location_outline)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_off_description)
+        }
+    }
+    
+    private fun startFollowingLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
+            .setMinUpdateIntervalMillis(3000L)
+            .build()
+        
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val location = result.locations.lastOrNull() ?: return
+                if (isFollowingLocation && ::googleMap.isInitialized) {
+                    val latLng = LatLng(location.latitude, location.longitude)
+                    googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng))
+                }
+            }
+        }
+        
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback!!, Looper.getMainLooper())
+        
+        // Also immediately center on current location
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location ->
+                if (location != null && isFollowingLocation && ::googleMap.isInitialized) {
+                    val latLng = LatLng(location.latitude, location.longitude)
+                    googleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng))
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Failed to get location for follow mode: ${e.message}")
+            }
+        
+        Log.d(TAG, "Started following location")
+    }
+    
+    private fun stopFollowingLocation() {
+        locationCallback?.let {
+            fusedLocationClient.removeLocationUpdates(it)
+        }
+        locationCallback = null
+        Log.d(TAG, "Stopped following location")
+    }
+
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menu?.add(0, 1, 0, getString(R.string.menu_toggle_debug_circles))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 2, 0, getString(R.string.menu_add_sample_data))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 3, 0, getString(R.string.menu_toggle_buildings))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 4, 0, getString(R.string.menu_clear_all_logs))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        // Display mode sub-menu
+        val displayModeMenu = menu?.addSubMenu(0, Menu.NONE, 0, getString(R.string.menu_display_mode))
+        DisplayMode.values().forEachIndexed { index, mode ->
+            displayModeMenu?.add(1, 100 + index, index, mode.displayName)
+        }
+        displayModeMenu?.setGroupCheckable(1, true, true)
+        val selectedItemId = 100 + DisplayMode.values().indexOf(currentDisplayMode)
+        displayModeMenu?.findItem(selectedItemId)?.isChecked = true
+
+        menu?.add(0, 1, 1, getString(R.string.menu_toggle_debug_circles))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 2, 2, getString(R.string.menu_add_sample_data))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 3, 3, getString(R.string.menu_toggle_buildings))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 4, 4, getString(R.string.menu_clear_all_logs))?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -968,6 +1078,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         return when (item.itemId) {
             android.R.id.home -> {
                 finish()
+                true
+            }
+            in 100 until (100 + DisplayMode.values().size) -> {
+                // Display mode selection
+                val modeIndex = item.itemId - 100
+                if (modeIndex in DisplayMode.values().indices) {
+                    item.isChecked = true
+                    currentDisplayMode = DisplayMode.values()[modeIndex]
+                    updateMapVisualization()
+                    Log.d(TAG, "Display mode changed to: ${currentDisplayMode.displayName}")
+                }
                 true
             }
             1 -> {
@@ -1104,10 +1225,24 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             registerReceiver(gsmAlertReceiver, filter)
         }
         Log.d(TAG, "GSM alert receiver registered")
+        
+        // Resume follow mode if it was active
+        if (isFollowingLocation) {
+            followLocationButton.setImageResource(R.drawable.ic_my_location_filled)
+            followLocationButton.contentDescription = getString(R.string.btn_follow_on_description)
+            startFollowingLocation()
+        }
     }
 
     override fun onStop() {
         Log.d(TAG, "MapsActivity onStop")
+        // Stop location updates to save battery while in background
+        if (isFollowingLocation && ::fusedLocationClient.isInitialized) {
+            locationCallback?.let {
+                fusedLocationClient.removeLocationUpdates(it)
+            }
+            locationCallback = null
+        }
         try {
             unregisterReceiver(gsmAlertReceiver)
         } catch (e: Exception) {
@@ -1136,6 +1271,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onDestroy() {
         Log.d(TAG, "MapsActivity onDestroy")
+        if (::fusedLocationClient.isInitialized) {
+            stopFollowingLocation()
+        }
         handler.removeCallbacksAndMessages(null)
         backgroundExecutor.shutdown()
         super.onDestroy()

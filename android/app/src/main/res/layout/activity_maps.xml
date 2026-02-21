@@ -23,14 +23,6 @@
             android:layout_marginEnd="8dp"
             android:spinnerMode="dropdown" />
 
-        <Spinner
-            android:id="@+id/displayModeSpinner"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:spinnerMode="dropdown" />
-
         <Button
             android:id="@+id/refreshButton"
             android:layout_width="wrap_content"
@@ -67,12 +59,32 @@
         android:text="@string/no_cell_info"
         android:visibility="gone" />
 
-    <!-- Map Fragment -->
-    <fragment
-        android:id="@+id/map"
-        android:name="com.google.android.gms.maps.SupportMapFragment"
+    <!-- Map area with floating follow button -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <fragment
+            android:id="@+id/map"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ImageButton
+            android:id="@+id/followLocationButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top|end"
+            android:layout_marginEnd="8dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_my_location_outline"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:elevation="6dp"
+            android:background="@drawable/bg_follow_button"
+            android:contentDescription="@string/btn_follow_off_description" />
+
+    </FrameLayout>
 
 </LinearLayout>
