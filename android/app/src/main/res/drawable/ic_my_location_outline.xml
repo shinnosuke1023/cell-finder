@@ -3,13 +3,16 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Navigation arrow pointing upper-right (outline only) -->
-    <path
-        android:fillColor="#666666"
-        android:pathData="M12,2L4.5,20.29l0.71,0.71L12,18l6.79,3 0.71,-0.71z"
-        android:strokeWidth="0"
-        android:strokeColor="#00000000" />
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M12,5.83l3.95,11.85L12,15.65l-3.95,2.03z" />
+    <!-- Navigation arrow rotated 45° to point upper-right (outline only) -->
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:rotation="45">
+        <path
+            android:fillColor="#666666"
+            android:pathData="M12,2L4.5,20.29l0.71,0.71L12,18l6.79,3 0.71,-0.71z" />
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M12,5.83l3.95,11.85L12,15.65l-3.95,2.03z" />
+    </group>
 </vector>
