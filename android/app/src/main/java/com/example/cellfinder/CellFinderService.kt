@@ -47,6 +47,8 @@ class CellFinderService : Service() {
     // --- ここを実行環境に合わせて変えてください ---
     private val SERVER_URL = "https://cell-finder-app-hhb9eyhjh3dyfwfg.japaneast-01.azurewebsites.net/log"
     private val POLL_INTERVAL_MS: Long = 5000
+    private val RETRY_INTERVAL_MS: Long = 30_000
+    private val RETRY_BATCH_SIZE = 100
 
     override fun onCreate() {
         Log.i(TAG, "Service onCreate() called")
@@ -59,6 +61,7 @@ class CellFinderService : Service() {
         Log.i(TAG, "Service started in foreground with notification")
         handler.post(logRunnable)
         Log.i(TAG, "Logging runnable started with interval: ${POLL_INTERVAL_MS}ms")
+        handler.postDelayed(retryRunnable, RETRY_INTERVAL_MS)
         
         // Clean up old data periodically (keep last 24 hours)
         cellDatabase.clearOldData(24)
@@ -69,6 +72,32 @@ class CellFinderService : Service() {
             Log.d(TAG, "logRunnable executing...")
             sampleAndSend()
             handler.postDelayed(this, POLL_INTERVAL_MS)
+        }
+    }
+
+    private val retryRunnable = object : Runnable {
+        override fun run() {
+            retryUnsyncedLogs()
+            handler.postDelayed(this, RETRY_INTERVAL_MS)
+        }
+    }
+
+    private fun retryUnsyncedLogs() {
+        val unsyncedLogs = cellDatabase.getUnsyncedLogs(RETRY_BATCH_SIZE)
+        if (unsyncedLogs.isEmpty()) return
+        Log.d(TAG, "Retrying ${unsyncedLogs.size} unsynced logs")
+        unsyncedLogs.forEach { (id, cellLog) ->
+            val payload = mapOf(
+                "timestamp" to cellLog.timestamp,
+                "lat" to cellLog.lat,
+                "lon" to cellLog.lon,
+                "cells" to listOf(mapOf(
+                    "type" to cellLog.type,
+                    "rssi" to cellLog.rssi,
+                    "cell_id" to cellLog.cellId
+                ))
+            )
+            sendJson(payload, listOf(id))
         }
     }
 
@@ -159,17 +188,17 @@ class CellFinderService : Service() {
             }
             
             // Store data locally
-            storeDataLocally(payload, cells)
+            val logIds = storeDataLocally(payload, cells)
             
             // Also send to server if configured
-            sendJson(payload)
+            sendJson(payload, logIds)
         }.addOnFailureListener { e ->
             Log.e(TAG, "Failed to get location: ${e.message}")
         }
     }
 
-    private fun storeDataLocally(payload: Map<String, Any?>, cells: List<Map<String, Any?>>) {
-        try {
+    private fun storeDataLocally(payload: Map<String, Any?>, cells: List<Map<String, Any?>>): List<Long> {
+        return try {
             val timestamp = payload["timestamp"] as? Long ?: System.currentTimeMillis()
             val lat = payload["lat"] as? Double
             val lon = payload["lon"] as? Double
@@ -188,12 +217,16 @@ class CellFinderService : Service() {
             }
             
             if (cellLogs.isNotEmpty()) {
-                cellDatabase.insertCellLogs(cellLogs)
+                val ids = cellDatabase.insertCellLogs(cellLogs)
                 Log.d(TAG, "Stored ${cellLogs.size} cell logs locally")
+                ids
+            } else {
+                emptyList()
             }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error storing data locally: ${e.message}", e)
+            emptyList()
         }
     }
 
@@ -257,7 +290,7 @@ class CellFinderService : Service() {
         }
     }
 
-    private fun sendJson(data: Any) {
+    private fun sendJson(data: Any, logIds: List<Long> = emptyList()) {
         try {
             val json = gson.toJson(data)
             Log.d(TAG, "Sending JSON to $SERVER_URL")
@@ -272,7 +305,11 @@ class CellFinderService : Service() {
                 }
                 override fun onResponse(call: Call, response: Response) {
                     Log.d(TAG, "HTTP response: ${response.code} ${response.message}")
-                    if (!response.isSuccessful) {
+                    if (response.isSuccessful) {
+                        if (logIds.isNotEmpty()) {
+                            cellDatabase.markAsSynced(logIds)
+                        }
+                    } else {
                         Log.w(TAG, "Server returned error: ${response.code}")
                     }
                     response.close()
@@ -343,6 +380,7 @@ class CellFinderService : Service() {
         Log.i(TAG, "Service onDestroy() called")
         isRunning = false
         handler.removeCallbacks(logRunnable)
+        handler.removeCallbacks(retryRunnable)
         Log.i(TAG, "Logging runnable stopped")
         super.onDestroy()
     }

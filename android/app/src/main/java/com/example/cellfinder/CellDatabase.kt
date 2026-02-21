@@ -28,7 +28,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
     companion object {
         private const val TAG = "CellDatabase"
         private const val DATABASE_NAME = "cell_finder.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
         
         private const val TABLE_LOGS = "logs"
         private const val COLUMN_ID = "id"
@@ -38,6 +38,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         private const val COLUMN_TYPE = "type"
         private const val COLUMN_RSSI = "rssi"
         private const val COLUMN_CELL_ID = "cell_id"
+        private const val COLUMN_SYNCED = "synced"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -50,7 +51,8 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
                 $COLUMN_LON REAL,
                 $COLUMN_TYPE TEXT,
                 $COLUMN_RSSI INTEGER,
-                $COLUMN_CELL_ID TEXT
+                $COLUMN_CELL_ID TEXT,
+                $COLUMN_SYNCED INTEGER DEFAULT 0
             )
         """.trimIndent()
         db.execSQL(createTableQuery)
@@ -59,8 +61,9 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         Log.d(TAG, "Upgrading database from version $oldVersion to $newVersion")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_LOGS")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE $TABLE_LOGS ADD COLUMN $COLUMN_SYNCED INTEGER DEFAULT 0")
+        }
     }
 
     fun insertCellLog(cellLog: CellLog): Long {
@@ -72,6 +75,7 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
             put(COLUMN_TYPE, cellLog.type)
             put(COLUMN_RSSI, cellLog.rssi)
             put(COLUMN_CELL_ID, cellLog.cellId)
+            put(COLUMN_SYNCED, 0)
         }
         
         val id = db.insert(TABLE_LOGS, null, values)
@@ -79,8 +83,9 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
         return id
     }
 
-    fun insertCellLogs(cellLogs: List<CellLog>) {
+    fun insertCellLogs(cellLogs: List<CellLog>): List<Long> {
         val db = writableDatabase
+        val ids = mutableListOf<Long>()
         db.beginTransaction()
         try {
             cellLogs.forEach { cellLog ->
@@ -91,14 +96,62 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
                     put(COLUMN_TYPE, cellLog.type)
                     put(COLUMN_RSSI, cellLog.rssi)
                     put(COLUMN_CELL_ID, cellLog.cellId)
+                    put(COLUMN_SYNCED, 0)
                 }
-                db.insert(TABLE_LOGS, null, values)
+                ids.add(db.insert(TABLE_LOGS, null, values))
             }
             db.setTransactionSuccessful()
             Log.d(TAG, "Inserted ${cellLogs.size} cell logs")
         } finally {
             db.endTransaction()
         }
+        return ids
+    }
+
+    fun getUnsyncedLogs(limit: Int = 100): List<Pair<Long, CellLog>> {
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_LOGS,
+            null,
+            "$COLUMN_SYNCED = 0",
+            null, null, null,
+            "$COLUMN_TIMESTAMP ASC",
+            limit.toString()
+        )
+        val logs = mutableListOf<Pair<Long, CellLog>>()
+        cursor.use {
+            while (it.moveToNext()) {
+                val id = it.getLong(it.getColumnIndexOrThrow(COLUMN_ID))
+                val cellLog = CellLog(
+                    timestamp = it.getLong(it.getColumnIndexOrThrow(COLUMN_TIMESTAMP)),
+                    lat = if (it.isNull(it.getColumnIndexOrThrow(COLUMN_LAT))) null
+                          else it.getDouble(it.getColumnIndexOrThrow(COLUMN_LAT)),
+                    lon = if (it.isNull(it.getColumnIndexOrThrow(COLUMN_LON))) null
+                          else it.getDouble(it.getColumnIndexOrThrow(COLUMN_LON)),
+                    type = it.getString(it.getColumnIndexOrThrow(COLUMN_TYPE)),
+                    rssi = if (it.isNull(it.getColumnIndexOrThrow(COLUMN_RSSI))) null
+                           else it.getInt(it.getColumnIndexOrThrow(COLUMN_RSSI)),
+                    cellId = it.getString(it.getColumnIndexOrThrow(COLUMN_CELL_ID))
+                )
+                logs.add(Pair(id, cellLog))
+            }
+        }
+        Log.d(TAG, "Retrieved ${logs.size} unsynced cell logs")
+        return logs
+    }
+
+    fun markAsSynced(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val db = writableDatabase
+        val placeholders = ids.joinToString(",") { "?" }
+        val values = ContentValues().apply { put(COLUMN_SYNCED, 1) }
+        val updated = db.update(
+            TABLE_LOGS,
+            values,
+            "$COLUMN_ID IN ($placeholders)",
+            ids.map { it.toString() }.toTypedArray()
+        )
+        Log.d(TAG, "Marked $updated records as synced")
     }
 
     fun getRecentCellLogs(windowMinutes: Int = 60): List<CellLog> {
