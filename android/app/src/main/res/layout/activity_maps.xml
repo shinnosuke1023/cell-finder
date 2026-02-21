@@ -82,7 +82,7 @@
             android:scaleType="centerInside"
             android:padding="10dp"
             android:elevation="6dp"
-            android:background="@android:drawable/dialog_holo_light_frame"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/btn_follow_off_description" />
 
     </FrameLayout>
