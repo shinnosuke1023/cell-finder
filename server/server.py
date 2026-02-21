@@ -2,7 +2,6 @@ import logging
 import math
 import sqlite3
 import time
-from collections import deque
 
 from flask import Flask, g, jsonify, render_template, request
 from flask_cors import CORS
@@ -17,9 +16,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
-
-# In-memory store for recent GSM alerts (max 100 entries, last 1 hour)
-_gsm_alerts = deque(maxlen=100)
 
 
 @app.teardown_appcontext
@@ -76,19 +72,9 @@ def log():
     db.commit()
     logger.debug("Logged %d cell records", len(cells))
 
-    # Detect GSM cells and raise alert
+    # Log warning when GSM cells are detected
     gsm_cells = [c for c in cells if c.get("type") == "GSM"]
     if gsm_cells:
-        alert = {
-            "timestamp": timestamp,
-            "lat": lat,
-            "lon": lon,
-            "gsm_cells": [
-                {"cell_id": c.get("cell_id"), "rssi": c.get("rssi")}
-                for c in gsm_cells
-            ],
-        }
-        _gsm_alerts.append(alert)
         logger.warning(
             "GSM ALERT: %d GSM cell(s) detected at lat=%s, lon=%s, cells=%s",
             len(gsm_cells),
@@ -102,10 +88,24 @@ def log():
 
 @app.route('/alerts')
 def alerts():
-    """Return recent GSM alerts (last 1 hour)."""
+    """Return recent GSM alerts (last 1 hour) derived from the logs table."""
+    db = get_db()
     one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
-    recent = [a for a in _gsm_alerts if a["timestamp"] > one_hour_ago_ms]
-    return jsonify(recent)
+    rows = db.execute(
+        "SELECT timestamp, lat, lon, rssi, cell_id FROM logs "
+        "WHERE type = 'GSM' AND timestamp > ? ORDER BY timestamp",
+        (one_hour_ago_ms,),
+    ).fetchall()
+
+    # Group consecutive GSM records by timestamp
+    grouped = {}
+    for ts, lat, lon, rssi, cell_id in rows:
+        key = ts
+        if key not in grouped:
+            grouped[key] = {"timestamp": ts, "lat": lat, "lon": lon, "gsm_cells": []}
+        grouped[key]["gsm_cells"].append({"cell_id": cell_id, "rssi": rssi})
+
+    return jsonify(list(grouped.values()))
 
 
 @app.route('/map_data')

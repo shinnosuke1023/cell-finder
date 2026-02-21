@@ -1,9 +1,13 @@
 package com.example.cellfinder
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -73,6 +77,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var allCellIds = listOf<String>()
     private var currentDisplayMode = DisplayMode.RSSI_CIRCLES
     private var selectedCellId: String? = null
+    private var isGsmAlertShowing = false
+
+    private val gsmAlertReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == CellFinderService.ACTION_GSM_DETECTED) {
+                Log.w(TAG, "GSM detected broadcast received in MapsActivity")
+                showGsmAlertDialog()
+            }
+        }
+    }
     
     enum class DisplayMode(val displayName: String) {
         RSSI_CIRCLES("RSSI Circles"),
@@ -1044,6 +1058,45 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(CellFinderService.ACTION_GSM_DETECTED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(gsmAlertReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(gsmAlertReceiver, filter)
+        }
+        Log.d(TAG, "GSM alert receiver registered")
+    }
+
+    override fun onStop() {
+        Log.d(TAG, "MapsActivity onStop")
+        try {
+            unregisterReceiver(gsmAlertReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister receiver: ${e.message}")
+        }
+        isGsmAlertShowing = false
+        super.onStop()
+    }
+
+    private fun showGsmAlertDialog() {
+        if (isGsmAlertShowing) return
+        isGsmAlertShowing = true
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.gsm_alert_title))
+            .setMessage(getString(R.string.gsm_alert_message))
+            .setPositiveButton(getString(R.string.gsm_alert_ok)) { dialog, _ ->
+                dialog.dismiss()
+                isGsmAlertShowing = false
+            }
+            .setOnCancelListener {
+                isGsmAlertShowing = false
+            }
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .show()
     }
 
     override fun onDestroy() {

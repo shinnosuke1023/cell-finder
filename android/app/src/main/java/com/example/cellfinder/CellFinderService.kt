@@ -32,6 +32,9 @@ class CellFinderService : Service() {
     private val CHANNEL_ID = "cell_finder_channel"
     private val GSM_ALERT_CHANNEL_ID = "gsm_alert_channel"
     private val GSM_ALERT_NOTIFICATION_ID = 1001
+    private var lastGsmAlertTimeMs: Long = 0
+    private var wasGsmDetected: Boolean = false
+    private val GSM_ALERT_COOLDOWN_MS: Long = 60_000 // 1 minute cooldown between alerts
     private lateinit var telephonyManager: TelephonyManager
     private lateinit var cellDatabase: CellDatabase
     private val handler = Handler(Looper.getMainLooper())
@@ -137,11 +140,18 @@ class CellFinderService : Service() {
 
             Log.i(TAG, "Sending payload: foundGsmType=$foundGsmType, anyTypeKnown=$anyTypeKnown, cellCount=${cells.size}")
             
-            // GSM alert: notify user when GSM is detected
+            // GSM alert: notify user only on transition (not previously detected) or after cooldown
             if (foundGsmType) {
-                Log.w(TAG, "GSM (2G) connection detected! Sending alert.")
-                sendGsmAlertNotification()
-                sendGsmDetectedBroadcast()
+                val now = System.currentTimeMillis()
+                if (!wasGsmDetected || now - lastGsmAlertTimeMs > GSM_ALERT_COOLDOWN_MS) {
+                    Log.w(TAG, "GSM (2G) connection detected! Sending alert.")
+                    sendGsmAlertNotification()
+                    sendGsmDetectedBroadcast()
+                    lastGsmAlertTimeMs = now
+                }
+                wasGsmDetected = true
+            } else {
+                wasGsmDetected = false
             }
             
             // Store data locally
