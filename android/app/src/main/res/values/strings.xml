@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CellFinder</string>
-    <string name="status_logging_started">Status: Logging started</string>
-    <string name="status_logging_stopped">Status: Logging stopped</string>
-    <string name="status_permission_denied">Status: Permission denied</string>
-    <string name="status_sim_state">Status: SIM state = %1$s</string>
-    <string name="status_not_started">Status: Not started</string>
-    <string name="btn_start_logging">Start Logging</string>
-    <string name="btn_stop_logging">Stop Logging</string>
-    <string name="btn_show_map">Show Map</string>
-    <string name="btn_start_tracking">Start EKF Tracking</string>
-    <string name="btn_stop_tracking">Stop EKF Tracking</string>
+    <string name="status_logging_started">ステータス: ログ記録中</string>
+    <string name="status_logging_stopped">ステータス: 停止中</string>
+    <string name="status_permission_denied">ステータス: 権限が拒否されました</string>
+    <string name="status_sim_state">ステータス: SIM状態 = %1$s</string>
+    <string name="status_not_started">ステータス: 未開始</string>
+    <string name="btn_start">開始</string>
+    <string name="btn_stop">停止</string>
+    <string name="btn_start_logging">ログ記録開始</string>
+    <string name="btn_stop_logging">ログ記録停止</string>
+    <string name="btn_show_map">マップを表示</string>
+    <string name="btn_start_tracking">EKFトラッキング開始</string>
+    <string name="btn_stop_tracking">EKFトラッキング停止</string>
+    <string name="btn_stop_services">ログ・トラッキング停止</string>
+    <string name="btn_refresh">更新</string>
+    <string name="label_app_description">基地局ロガー &amp; EKFトラッキング</string>
+    <string name="map_title">基地局ヒートマップ</string>
+    <string name="no_cell_info">現在のセル情報なし</string>
     <string name="gsm_alert_title">⚠ GSM接続を検出</string>
     <string name="gsm_alert_message">お使いのデバイスがGSM（2G）基地局に接続しました。近くにIMSIキャッチャー（偽基地局）が存在する可能性があります。</string>
     <string name="gsm_alert_ok">OK</string>

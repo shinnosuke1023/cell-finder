@@ -36,7 +36,7 @@
         <activity
             android:name="com.example.cellfinder.MapsActivity"
             android:exported="false"
-            android:label="Cell Tower Map" />
+            android:label="@string/map_title" />
 
         <activity
             android:name="com.example.cellfinder.MainActivity"

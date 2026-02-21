@@ -35,10 +35,21 @@
             android:id="@+id/refreshButton"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:text="Refresh"
+            android:text="@string/btn_refresh"
             android:textSize="12sp"
             android:minWidth="0dp"
             android:paddingHorizontal="12dp" />
+
+        <Button
+            android:id="@+id/stopServicesButton"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:text="@string/btn_stop"
+            android:textSize="12sp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="12dp"
+            android:backgroundTint="#F44336"
+            android:textColor="@android:color/white" />
 
     </LinearLayout>
     
@@ -53,7 +64,7 @@
         android:textSize="12sp"
         android:maxLines="2"
         android:ellipsize="end"
-        android:text="No current cell information"
+        android:text="@string/no_cell_info"
         android:visibility="gone" />
 
     <!-- Map Fragment -->

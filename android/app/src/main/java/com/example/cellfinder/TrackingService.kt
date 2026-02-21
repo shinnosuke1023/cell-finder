@@ -159,8 +159,8 @@ class TrackingService : Service() {
         )
         
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Base Station Tracker")
-            .setContentText("Tracking base station location...")
+            .setContentTitle("基地局トラッカー")
+            .setContentText("基地局の位置を追跡中...")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
             .build()
@@ -169,10 +169,10 @@ class TrackingService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Base Station Tracking",
+            "基地局トラッキング",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Tracking fake base station location"
+            description = "偽基地局の位置を追跡中"
         }
         
         val notificationManager = getSystemService(NotificationManager::class.java)

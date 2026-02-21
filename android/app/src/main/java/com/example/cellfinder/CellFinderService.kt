@@ -286,7 +286,7 @@ class CellFinderService : Service() {
         val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("CellFinder")
-            .setContentText("Logging cell & location")
+            .setContentText("セル情報と位置をログ記録中")
             .setContentIntent(pi)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .build()

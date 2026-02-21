@@ -54,6 +54,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var cellIdSpinner: Spinner
     private lateinit var displayModeSpinner: Spinner
     private lateinit var refreshButton: Button
+    private lateinit var stopServicesButton: Button
     private lateinit var currentCellInfoTextView: TextView
     
     // Map elements
@@ -89,10 +90,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     enum class DisplayMode(val displayName: String) {
-        RSSI_CIRCLES("RSSI Circles"),
-        HEATMAP("Heatmap"),
-        PINS("Pins"),
-        EKF_TRACKING("EKF Tracking")
+        RSSI_CIRCLES("RSSI サークル"),
+        HEATMAP("ヒートマップ"),
+        PINS("ピン"),
+        EKF_TRACKING("EKF トラッキング")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,7 +117,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         
         // Set up action bar
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.title = "Cell Tower Heatmap"
+        supportActionBar?.title = getString(R.string.map_title)
         
         // Observe ViewModel for EKF tracking updates
         observeViewModel()
@@ -150,13 +151,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             ekfBaseStationMarker = googleMap.addMarker(
                 MarkerOptions()
                     .position(baseStationPos)
-                    .title("EKF Estimated Base Station")
-                    .snippet("Cell ID: ${state.cellId}\nError: ${String.format("%.1f", state.errorRadiusMeters)}m\nP0: ${String.format("%.1f", state.referencePower)} dBm\nη: ${String.format("%.2f", state.pathLossExponent)}")
+                    .title("EKF推定基地局")
+                    .snippet("セルID: ${state.cellId}\n誤差: ${String.format("%.1f", state.errorRadiusMeters)}m\nP0: ${String.format("%.1f", state.referencePower)} dBm\nη: ${String.format("%.2f", state.pathLossExponent)}")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
             )
         } else {
             ekfBaseStationMarker?.position = baseStationPos
-            ekfBaseStationMarker?.snippet = "Cell ID: ${state.cellId}\nError: ${String.format("%.1f", state.errorRadiusMeters)}m\nP0: ${String.format("%.1f", state.referencePower)} dBm\nη: ${String.format("%.2f", state.pathLossExponent)}"
+            ekfBaseStationMarker?.snippet = "セルID: ${state.cellId}\n誤差: ${String.format("%.1f", state.errorRadiusMeters)}m\nP0: ${String.format("%.1f", state.referencePower)} dBm\nη: ${String.format("%.2f", state.pathLossExponent)}"
         }
         
         // Update error circle
@@ -181,13 +182,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             ekfUserMarker = googleMap.addMarker(
                 MarkerOptions()
                     .position(userPos)
-                    .title("Your Location")
-                    .snippet("RSSI: ${state.rssi} dBm\nCell: ${state.cellType}")
+                    .title("現在地")
+                    .snippet("RSSI: ${state.rssi} dBm\nセル: ${state.cellType}")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
             )
         } else {
             ekfUserMarker?.position = userPos
-            ekfUserMarker?.snippet = "RSSI: ${state.rssi} dBm\nCell: ${state.cellType}"
+            ekfUserMarker?.snippet = "RSSI: ${state.rssi} dBm\nセル: ${state.cellType}"
         }
         
         // Don't auto-fit camera to preserve user's view
@@ -222,6 +223,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         cellIdSpinner = findViewById(R.id.cellIdSpinner)
         displayModeSpinner = findViewById(R.id.displayModeSpinner)
         refreshButton = findViewById(R.id.refreshButton)
+        stopServicesButton = findViewById(R.id.stopServicesButton)
         currentCellInfoTextView = findViewById(R.id.currentCellInfo)
         
         // Setup display mode spinner
@@ -243,7 +245,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                 val selectedItem = parent?.getItemAtPosition(position)?.toString() ?: ""
                 
-                selectedCellId = if (position == 0 || selectedItem.startsWith("All Cell IDs")) {
+                selectedCellId = if (position == 0 || selectedItem.startsWith("全セルID")) {
                     null
                 } else {
                     selectedItem
@@ -258,6 +260,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Setup refresh button
         refreshButton.setOnClickListener {
             updateMapData()
+        }
+        
+        // Setup stop services button
+        stopServicesButton.setOnClickListener {
+            Log.d(TAG, "Stop services button clicked on map screen")
+            stopService(Intent(this, CellFinderService::class.java))
+            stopService(Intent(this, TrackingService::class.java))
+            Toast.makeText(this, getString(R.string.status_logging_stopped), Toast.LENGTH_SHORT).show()
+            Log.i(TAG, "All services stopped from map screen")
         }
     }
 
@@ -348,7 +359,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating map data: ${e.message}", e)
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "Error loading map data: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, "マップデータ読み込みエラー: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -357,11 +368,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun updateCellIdSpinner() {
         Log.d(TAG, "updateCellIdSpinner called with ${allCellIds.size} cell IDs")
         
-        val items = mutableListOf("All Cell IDs")
+        val items = mutableListOf("全セルID")
         
         // Add count to the first item
         if (allCellIds.isNotEmpty()) {
-            items[0] = "All Cell IDs (${allCellIds.size} total)"
+            items[0] = "全セルID（${allCellIds.size}件）"
         }
         
         // Simply add all cell IDs for now - we'll handle performance differently
@@ -390,14 +401,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             
         } catch (e: Exception) {
             Log.e(TAG, "Error updating cell ID spinner: ${e.message}", e)
-            Toast.makeText(this, "Error updating cell ID filter: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "セルIDフィルタの更新に失敗: ${e.message}", Toast.LENGTH_LONG).show()
         }
         
         // If there are many cell IDs, show a toast to inform user
         if (allCellIds.size > 50) {
             handler.post {
                 Toast.makeText(this@MapsActivity, 
-                    "Found ${allCellIds.size} cell IDs. Dropdown may be long to scroll.", 
+                    "セルIDが${allCellIds.size}件あります。スクロールが長くなる場合があります。", 
                     Toast.LENGTH_LONG).show()
             }
         }
@@ -446,7 +457,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // Don't auto-fit camera on updates to preserve user's view
         if (filteredLogs.isEmpty()) {
             Log.w(TAG, "No data to display on map")
-            Toast.makeText(this@MapsActivity, "No data available to display", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MapsActivity, "表示するデータがありません", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -457,7 +468,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val rssiValues = cellLogs.mapNotNull { it.rssi }
         if (rssiValues.isEmpty()) {
             Log.w(TAG, "No valid RSSI values found")
-            Toast.makeText(this@MapsActivity, "No valid RSSI data for heatmap", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MapsActivity, "有効なRSSIデータがありません", Toast.LENGTH_SHORT).show()
             return
         }
         
@@ -565,11 +576,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error creating RSSI-based heatmap: ${e.message}", e)
-                Toast.makeText(this@MapsActivity, "Error creating heatmap: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MapsActivity, "ヒートマップ作成エラー: ${e.message}", Toast.LENGTH_LONG).show()
             }
         } else {
             Log.w(TAG, "No valid data points for RSSI-based heatmap")
-            Toast.makeText(this@MapsActivity, "No valid data for heatmap", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MapsActivity, "有効なデータがありません", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -691,8 +702,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             val marker = googleMap.addMarker(
                 MarkerOptions()
                     .position(LatLng(log.lat, log.lon))
-                    .title("Cell Observation")
-                    .snippet("Type: ${log.type ?: "Unknown"}\nRSSI: ${log.rssi ?: "N/A"} dBm\nCell ID: ${log.cellId ?: "Unknown"}")
+                    .title("セル観測")
+                    .snippet("種別: ${log.type ?: "不明"}\nRSSI: ${log.rssi ?: "N/A"} dBm\nセルID: ${log.cellId ?: "不明"}")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
             )
             
@@ -717,8 +728,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             val marker = googleMap.addMarker(
                 MarkerOptions()
                     .position(LatLng(baseStation.lat, baseStation.lon))
-                    .title("Estimated Base Station")
-                    .snippet("Cell ID: ${baseStation.cellId}\nType: ${baseStation.type ?: "Unknown"}\nObservations: ${baseStation.count}")
+                    .title("推定基地局")
+                    .snippet("セルID: ${baseStation.cellId}\n種別: ${baseStation.type ?: "不明"}\n観測数: ${baseStation.count}")
                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
             )
             
@@ -807,26 +818,26 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             
             val baseStationInfo = if (baseStation != null) {
                 val position = baseStation.position
-                "Estimated Base Station: ${position.latitude}, ${position.longitude}"
+                "推定基地局位置: ${position.latitude}, ${position.longitude}"
             } else {
-                "No base station estimate available"
+                "基地局の推定位置がありません"
             }
             
             // Show detailed information in a dialog
             AlertDialog.Builder(this)
-                .setTitle("Cell Tower Information")
+                .setTitle("基地局情報")
                 .setMessage("""
-                    Cell ID: ${cellLog.cellId ?: "Unknown"}
-                    Type: ${cellLog.type ?: "Unknown"}
+                    セルID: ${cellLog.cellId ?: "不明"}
+                    種別: ${cellLog.type ?: "不明"}
                     RSSI: ${cellLog.rssi} dBm
                     
-                    Observation Location:
-                    Lat: ${cellLog.lat}
-                    Lon: ${cellLog.lon}
+                    観測位置:
+                    緯度: ${cellLog.lat}
+                    経度: ${cellLog.lon}
                     
                     $baseStationInfo
                     
-                    Timestamp: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(cellLog.timestamp))}
+                    時刻: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(cellLog.timestamp))}
                 """.trimIndent())
                 .setPositiveButton("OK", null)
                 .show()
@@ -834,7 +845,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             Log.d(TAG, "Circle clicked: Cell ID=${cellLog.cellId}, RSSI=${cellLog.rssi}dBm")
         } else {
             // This might be a debug circle, show basic info
-            Toast.makeText(this, "Debug circle (coverage estimate)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "デバッグ用サークル（カバレッジ推定）", Toast.LENGTH_SHORT).show()
         }
     }
     
@@ -851,7 +862,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             val cellInfo = telephonyManager?.allCellInfo
             
             if (cellInfo.isNullOrEmpty()) {
-                currentCellInfoTextView.text = "No current cell information available"
+                currentCellInfoTextView.text = "現在のセル情報がありません"
                 currentCellInfoTextView.visibility = android.view.View.VISIBLE
                 return
             }
@@ -881,19 +892,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         val signal = connectedCell.cellSignalStrength as android.telephony.CellSignalStrengthNr
                         "5G NR - NCI: ${identity.nci}, SS-RSRP: ${signal.dbm} dBm"
                     }
-                    else -> "Unknown cell type"
+                    else -> "不明なセル種別"
                 }
                 
-                currentCellInfoTextView.text = "📱 Connected: $cellDetails"
+                currentCellInfoTextView.text = "📱 接続中: $cellDetails"
                 currentCellInfoTextView.visibility = android.view.View.VISIBLE
             } else {
-                currentCellInfoTextView.text = "No connected cell found (${cellInfo.size} cells detected)"
+                currentCellInfoTextView.text = "接続中のセルなし（${cellInfo.size}件検出）"
                 currentCellInfoTextView.visibility = android.view.View.VISIBLE
             }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error getting current cell info: ${e.message}", e)
-            currentCellInfoTextView.text = "Error getting cell info"
+            currentCellInfoTextView.text = "セル情報の取得に失敗"
             currentCellInfoTextView.visibility = android.view.View.VISIBLE
         }
     }
@@ -923,10 +934,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menu?.add(0, 1, 0, "Toggle Debug Circles")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 2, 0, "Add Sample Data")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 3, 0, "Toggle Buildings")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu?.add(0, 4, 0, "Clear All Logs")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 1, 0, "デバッグサークル切替")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 2, 0, "サンプルデータ追加")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 3, 0, "建物表示切替")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu?.add(0, 4, 0, "全ログ削除")?.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
@@ -949,8 +960,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             3 -> {
                 // Toggle buildings visibility
                 googleMap.isBuildingsEnabled = !googleMap.isBuildingsEnabled
-                val status = if (googleMap.isBuildingsEnabled) "enabled" else "disabled"
-                Toast.makeText(this, "Buildings $status", Toast.LENGTH_SHORT).show()
+                val status = if (googleMap.isBuildingsEnabled) "表示" else "非表示"
+                Toast.makeText(this, "建物レイヤー: $status", Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "Buildings layer $status")
                 true
             }
@@ -1008,14 +1019,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Log.d(TAG, "Sample data inserted successfully")
                 
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "Sample data added for testing", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapsActivity, "テスト用サンプルデータを追加しました", Toast.LENGTH_SHORT).show()
                     updateMapData() // Refresh the map
                 }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error adding sample data: ${e.message}", e)
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "Error adding sample data: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, "サンプルデータ追加エラー: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1023,12 +1034,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun clearAllLogsWithConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("Clear All Logs")
-            .setMessage("Are you sure you want to delete all cell tower logs? This action cannot be undone.")
-            .setPositiveButton("Clear All") { _, _ ->
+            .setTitle("全ログ削除")
+            .setMessage("全ての基地局ログを削除しますか？この操作は元に戻せません。")
+            .setPositiveButton("全削除") { _, _ ->
                 clearAllLogs()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("キャンセル", null)
             .show()
     }
 
@@ -1040,7 +1051,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 val deletedCount = cellDatabase.clearAllLogs()
                 
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "Cleared $deletedCount log records successfully", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MapsActivity, "${deletedCount}件のログを削除しました", Toast.LENGTH_SHORT).show()
                     
                     // Reset data and refresh map
                     allCellLogs = emptyList()
@@ -1054,7 +1065,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             } catch (e: Exception) {
                 Log.e(TAG, "Error clearing logs: ${e.message}", e)
                 handler.post {
-                    Toast.makeText(this@MapsActivity, "Error clearing logs: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, "ログ削除エラー: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
