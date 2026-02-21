@@ -45,6 +45,7 @@ class CellFinderService : Service() {
     private val client = OkHttpClient()
     private val gson = Gson()
     private val pendingSyncIds: MutableSet<Long> = Collections.synchronizedSet(mutableSetOf())
+    @Volatile private var destroyed = false
 
     // --- ここを実行環境に合わせて変えてください ---
     private val SERVER_URL = "https://cell-finder-app-hhb9eyhjh3dyfwfg.japaneast-01.azurewebsites.net/log"
@@ -90,17 +91,27 @@ class CellFinderService : Service() {
         if (unsyncedLogs.isEmpty()) return
         Log.d(TAG, "Retrying ${unsyncedLogs.size} unsynced logs")
 
-        // Group by (timestamp, lat, lon) to better approximate original sampling batches
+        // Group by (timestamp, lat, lon) to better approximate original sampling batches.
+        // NOTE: This is an approximation — records sharing the same (timestamp, lat, lon) are
+        // assumed to originate from the same sampling event. Logs with null lat/lon will all fall
+        // into a single batch. A future improvement would be to store an explicit batchId column.
         unsyncedLogs.groupBy { (_, log) -> Triple(log.timestamp, log.lat, log.lon) }
             .forEach { (_, logsForBatch) ->
             val firstLog = logsForBatch.first().second
+            if (firstLog.lat == null || firstLog.lon == null) {
+                Log.w(TAG, "Retrying ${logsForBatch.size} log(s) without location data (lat/lon is null)")
+            }
             val cells = logsForBatch.map { (_, cellLog) ->
                 mapOf(
                     "type" to cellLog.type,
                     "rssi" to cellLog.rssi,
-                    "cell_id" to cellLog.cellId
+                    "cell_id" to cellLog.cellId,
+                    // hasIdentity is a derived field that can be reconstructed from cell_id
+                    "hasIdentity" to (cellLog.cellId != null)
                 )
             }
+            // NOTE: simState, foundGsmType, and anyTypeKnown are not stored in the DB schema
+            // and therefore use conservative defaults on retry.
             val payload = mapOf(
                 "timestamp" to firstLog.timestamp,
                 "lat" to firstLog.lat,
@@ -232,7 +243,12 @@ class CellFinderService : Service() {
             
             if (cellLogs.isNotEmpty()) {
                 val ids = cellDatabase.insertCellLogs(cellLogs)
-                Log.d(TAG, "Stored ${cellLogs.size} cell logs locally")
+                if (ids.isEmpty()) {
+                    Log.w(TAG, "DB insert returned no IDs for ${cellLogs.size} cell log(s); " +
+                        "data will still be attempted to server but cannot be retried if the request fails")
+                } else {
+                    Log.d(TAG, "Stored ${cellLogs.size} cell logs locally")
+                }
                 ids
             } else {
                 emptyList()
@@ -329,7 +345,7 @@ class CellFinderService : Service() {
                     if (!successful) Log.w(TAG, "Server returned error: $code")
                     response.close()
                     handler.post {
-                        if (successful && logIds.isNotEmpty()) {
+                        if (!destroyed && successful && logIds.isNotEmpty()) {
                             cellDatabase.markAsSynced(logIds)
                         }
                         pendingSyncIds.removeAll(logIds.toSet())
@@ -401,6 +417,7 @@ class CellFinderService : Service() {
     override fun onDestroy() {
         Log.i(TAG, "Service onDestroy() called")
         isRunning = false
+        destroyed = true
         handler.removeCallbacks(logRunnable)
         handler.removeCallbacks(retryRunnable)
         Log.i(TAG, "Logging runnable stopped")
@@ -410,6 +427,12 @@ class CellFinderService : Service() {
             Log.i(TAG, "All in-flight HTTP requests cancelled and pendingSyncIds cleared")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to cancel in-flight HTTP requests", e)
+        }
+        try {
+            cellDatabase.close()
+            Log.i(TAG, "CellDatabase connection closed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to close CellDatabase", e)
         }
         super.onDestroy()
     }
