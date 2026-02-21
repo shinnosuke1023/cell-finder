@@ -21,6 +21,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.util.Collections
 import android.util.Log
 
 class CellFinderService : Service() {
@@ -43,6 +44,7 @@ class CellFinderService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val client = OkHttpClient()
     private val gson = Gson()
+    private val pendingSyncIds: MutableSet<Long> = Collections.synchronizedSet(mutableSetOf())
 
     // --- ここを実行環境に合わせて変えてください ---
     private val SERVER_URL = "https://cell-finder-app-hhb9eyhjh3dyfwfg.japaneast-01.azurewebsites.net/log"
@@ -84,20 +86,33 @@ class CellFinderService : Service() {
 
     private fun retryUnsyncedLogs() {
         val unsyncedLogs = cellDatabase.getUnsyncedLogs(RETRY_BATCH_SIZE)
+            .filter { (id, _) -> id !in pendingSyncIds }
         if (unsyncedLogs.isEmpty()) return
         Log.d(TAG, "Retrying ${unsyncedLogs.size} unsynced logs")
-        unsyncedLogs.forEach { (id, cellLog) ->
-            val payload = mapOf(
-                "timestamp" to cellLog.timestamp,
-                "lat" to cellLog.lat,
-                "lon" to cellLog.lon,
-                "cells" to listOf(mapOf(
+
+        // Group by timestamp so each retry payload matches the original batched structure
+        unsyncedLogs.groupBy { it.second.timestamp }.forEach { (_, logsForTimestamp) ->
+            val firstLog = logsForTimestamp.first().second
+            val cells = logsForTimestamp.map { (_, cellLog) ->
+                mapOf(
                     "type" to cellLog.type,
                     "rssi" to cellLog.rssi,
-                    "cell_id" to cellLog.cellId
-                ))
+                    "cell_id" to cellLog.cellId,
+                    "dbm" to cellLog.rssi,
+                    "hasIdentity" to (cellLog.cellId != null)
+                )
+            }
+            val payload = mapOf(
+                "timestamp" to firstLog.timestamp,
+                "lat" to firstLog.lat,
+                "lon" to firstLog.lon,
+                "simState" to null,
+                "foundGsmType" to false,
+                "anyTypeKnown" to false,
+                "cells" to cells
             )
-            sendJson(payload, listOf(id))
+            val ids = logsForTimestamp.map { it.first }
+            sendJson(payload, ids)
         }
     }
 
@@ -296,12 +311,17 @@ class CellFinderService : Service() {
             Log.d(TAG, "Sending JSON to $SERVER_URL")
             Log.v(TAG, "JSON payload: $json")
 
+            if (logIds.isNotEmpty()) {
+                pendingSyncIds.addAll(logIds)
+            }
+
             val body = json.toRequestBody("application/json".toMediaTypeOrNull())
             val req = Request.Builder().url(SERVER_URL).post(body).build()
 
             client.newCall(req).enqueue(object: Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     Log.e(TAG, "HTTP request failed: ${e.message}")
+                    pendingSyncIds.removeAll(logIds.toSet())
                 }
                 override fun onResponse(call: Call, response: Response) {
                     Log.d(TAG, "HTTP response: ${response.code} ${response.message}")
@@ -312,11 +332,13 @@ class CellFinderService : Service() {
                     } else {
                         Log.w(TAG, "Server returned error: ${response.code}")
                     }
+                    pendingSyncIds.removeAll(logIds.toSet())
                     response.close()
                 }
             })
         } catch (e: Exception) {
             Log.e(TAG, "Error in sendJson: ${e.message}", e)
+            pendingSyncIds.removeAll(logIds.toSet())
         }
     }
 
@@ -382,6 +404,12 @@ class CellFinderService : Service() {
         handler.removeCallbacks(logRunnable)
         handler.removeCallbacks(retryRunnable)
         Log.i(TAG, "Logging runnable stopped")
+        try {
+            client.dispatcher.cancelAll()
+            Log.i(TAG, "All in-flight HTTP requests cancelled")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cancel in-flight HTTP requests", e)
+        }
         super.onDestroy()
     }
 

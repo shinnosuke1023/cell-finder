@@ -102,6 +102,9 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
             }
             db.setTransactionSuccessful()
             Log.d(TAG, "Inserted ${cellLogs.size} cell logs")
+        } catch (e: Exception) {
+            Log.e(TAG, "Transaction failed, rolling back inserts: ${e.message}", e)
+            return emptyList()
         } finally {
             db.endTransaction()
         }
@@ -152,6 +155,9 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
             ids.map { it.toString() }.toTypedArray()
         )
         Log.d(TAG, "Marked $updated records as synced")
+        if (updated != ids.size) {
+            Log.w(TAG, "markAsSynced: updated row count ($updated) does not match ID count (${ids.size})")
+        }
     }
 
     fun getRecentCellLogs(windowMinutes: Int = 60): List<CellLog> {
@@ -198,8 +204,12 @@ class CellDatabase(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, 
     fun clearOldData(retentionHours: Int = 24) {
         val cutoffTime = System.currentTimeMillis() - (retentionHours * 60 * 60 * 1000)
         val db = writableDatabase
-        val deletedRows = db.delete(TABLE_LOGS, "$COLUMN_TIMESTAMP < ?", arrayOf(cutoffTime.toString()))
-        Log.d(TAG, "Cleared $deletedRows old records")
+        val deletedRows = db.delete(
+            TABLE_LOGS,
+            "$COLUMN_TIMESTAMP < ? AND $COLUMN_SYNCED = 1",
+            arrayOf(cutoffTime.toString())
+        )
+        Log.d(TAG, "Cleared $deletedRows old synced records")
     }
     
     fun clearAllLogs(): Int {
