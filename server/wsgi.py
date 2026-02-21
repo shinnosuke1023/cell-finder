@@ -16,4 +16,5 @@ if os.environ.get("WEBSITE_SITE_NAME"):
 from server import app  # noqa: E402  (must come after env vars are set)
 
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
