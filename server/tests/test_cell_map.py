@@ -275,7 +275,7 @@ class TestPerformance(unittest.TestCase):
         elapsed = time.time() - start
 
         self.assertEqual(len(result), 7)
-        self.assertLess(elapsed, 5.0, f"Computation took {elapsed:.2f}s, expected < 5s")
+        self.assertLess(elapsed, 2.0, f"Computation took {elapsed:.2f}s, expected < 2s")
         print(f"\nPerformance: 1400 observations across 7 cells computed in {elapsed:.2f}s")
 
 

@@ -413,7 +413,7 @@ def _compute_cell_map_impl(conn, ple, window_sec, ref_rssi, ref_dist, bandwidth_
 # ── cell_map background cache ────────────────────────────────────────────────
 _cell_map_cache = None
 _cell_map_cache_lock = threading.Lock()
-CELL_MAP_INTERVAL = int(os.environ.get("CELL_MAP_INTERVAL", 10))
+CELL_MAP_INTERVAL = int(os.environ.get("CELL_MAP_INTERVAL", 10))  # seconds
 
 
 def _refresh_cell_map_cache():
