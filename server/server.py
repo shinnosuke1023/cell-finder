@@ -1,12 +1,14 @@
 import logging
 import math
+import os
 import sqlite3
+import threading
 import time
 
 from flask import Flask, g, jsonify, render_template, request
 from flask_cors import CORS
 
-from db import ARCHIVE_DB, close_db, get_db, init_db, start_archive_timer
+from db import ARCHIVE_DB, REALTIME_DB, close_db, get_db, init_db, start_archive_timer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -241,31 +243,13 @@ def _circle_intersections(x0, y0, r0, x1, y1, r1):
     return [(p1[0], p1[1], w_angle), (p2[0], p2[1], w_angle)]
 
 
-@app.route('/cell_map')
-def cell_map():
-    """セルごとに「受信電力→距離」の円の交点を投票して基地局位置を推定して返す。
-    クエリ引数:
-      - ple: パス損失指数 n（既定 2.0）
-      - window_sec: この秒数以内のログのみを対象（省略時は 3600 秒＝1時間）
-      - ref_rssi: 参照距離 ref_dist[m] における RSSI[dBm]（既定 -40）
-      - ref_dist: 参照距離[m]（既定 1.0）
-      - bandwidth_m: 交点クラスタリング半径[m]（既定 150）
-      - method: 'accum'（交点投票。既定） or 'centroid'（従来の加重重心）
-      - debug: 1 でデバッグ情報（各観測円）を返す
-    重複排除:
-      - 同一 (cell_id, type, lat, lon) のレコードが複数ある場合は、最新 (timestamp が最大) のみ利用。
-    """
-    db = get_db()
-    c = db.cursor()
+def _compute_cell_map_impl(conn, ple, window_sec, ref_rssi, ref_dist, bandwidth_m, method, debug_flag):
+    """セルごとに「受信電力→距離」の円の交点を投票して基地局位置を推定する。
 
-    # パラメータ取得
-    ple = request.args.get('ple', default=2.0, type=float)
-    window_sec = request.args.get('window_sec', default=3600, type=int)
-    ref_rssi = request.args.get('ref_rssi', default=-40.0, type=float)
-    ref_dist = request.args.get('ref_dist', default=1.0, type=float)
-    bandwidth_m = request.args.get('bandwidth_m', default=150.0, type=float)
-    method = request.args.get('method', default='accum', type=str)
-    debug_flag = request.args.get('debug', default=1, type=int)
+    conn: SQLite connection
+    Returns: list of dicts (JSON-serialisable).
+    """
+    c = conn.cursor()
 
     # 期間フィルタ
     params = []
@@ -308,7 +292,7 @@ def cell_map():
             continue
 
         # 従来の重心フォールバック用: 電力重みの重心
-        def centroid_estimate():
+        def centroid_estimate(logs=logs, ple=ple):
             sum_lat = sum_lon = sum_w = 0.0
             for log in logs:
                 rssi_dbm = max(min(log["rssi"], -20.0), -140.0)
@@ -325,7 +309,6 @@ def cell_map():
             est_latlon = centroid_estimate()
             out = {"cell_id": cell_id, "type": ctype, "lat": est_latlon[0], "lon": est_latlon[1], "count": len(logs)}
             if debug_flag:
-                # 円のデバッグ（RSSI→距離）
                 out["debug"] = {"circles": [{"lat": l["lat"], "lon": l["lon"], "radius_m": _rssi_to_distance_m(max(min(l["rssi"], -20.0), -140.0), ple, ref_rssi, ref_dist)} for l in logs]}
             result.append(out)
             continue
@@ -363,30 +346,49 @@ def cell_map():
             result.append(out)
             continue
 
-        # 近傍密度（半径 bandwidth_m 内の票数）最大の点を中心に加重平均
+        # Grid-based density estimation (O(k) instead of O(k²))
         bw = max(5.0, float(bandwidth_m))
-        best_idx = -1
-        best_score = -1.0
-        for k, (xk, yk, wk) in enumerate(intersections):
-            score = 0.0
-            for (xi, yi, wi) in intersections:
-                if (xi - xk) * (xi - xk) + (yi - yk) * (yi - yk) <= bw * bw:
-                    score += wi
-            if score > best_score:
-                best_score = score
-                best_idx = k
-        cx, cy, _ = intersections[best_idx]
+        bw_sq = bw * bw
 
-        # ベスト近傍で加重平均（距離減衰×交差角重み）
+        grid = {}
+        for (x, y, w) in intersections:
+            gx = int(x // bw)
+            gy = int(y // bw)
+            key = (gx, gy)
+            if key not in grid:
+                grid[key] = []
+            grid[key].append((x, y, w))
+
+        best_point = None
+        best_score = -1.0
+        for (gx, gy), cell_pts in grid.items():
+            for (xk, yk, wk) in cell_pts:
+                score = 0.0
+                for dgx in (-1, 0, 1):
+                    for dgy in (-1, 0, 1):
+                        for (xi, yi, wi) in grid.get((gx + dgx, gy + dgy), ()):
+                            if (xi - xk) * (xi - xk) + (yi - yk) * (yi - yk) <= bw_sq:
+                                score += wi
+                if score > best_score:
+                    best_score = score
+                    best_point = (xk, yk)
+
+        cx, cy = best_point
+
+        # ベスト近傍で加重平均（距離減衰×交差角重み）— grid で近傍のみ走査
         sumx = sumy = sumw = 0.0
-        for (xi, yi, wi) in intersections:
-            d2 = (xi - cx) * (xi - cx) + (yi - cy) * (yi - cy)
-            if d2 <= bw * bw:
-                w_dist = (1.0 - math.sqrt(d2) / bw)  # 0..1
-                w = wi * w_dist
-                sumx += xi * w
-                sumy += yi * w
-                sumw += w
+        cgx = int(cx // bw)
+        cgy = int(cy // bw)
+        for dgx in (-1, 0, 1):
+            for dgy in (-1, 0, 1):
+                for (xi, yi, wi) in grid.get((cgx + dgx, cgy + dgy), ()):
+                    d2 = (xi - cx) * (xi - cx) + (yi - cy) * (yi - cy)
+                    if d2 <= bw_sq:
+                        w_dist = (1.0 - math.sqrt(d2) / bw)  # 0..1
+                        w = wi * w_dist
+                        sumx += xi * w
+                        sumy += yi * w
+                        sumw += w
         if sumw > 0:
             ex = sumx / sumw
             ey = sumy / sumw
@@ -405,6 +407,88 @@ def cell_map():
             out["debug"] = {"circles": debug_circles}
         result.append(out)
 
+    return result
+
+
+# ── cell_map background cache ────────────────────────────────────────────────
+_cell_map_cache = None
+_cell_map_cache_lock = threading.Lock()
+CELL_MAP_INTERVAL = int(os.environ.get("CELL_MAP_INTERVAL", 10))  # seconds
+
+
+def _refresh_cell_map_cache():
+    """Recompute cell_map with default parameters and store in cache."""
+    global _cell_map_cache
+    conn = sqlite3.connect(REALTIME_DB)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        result = _compute_cell_map_impl(
+            conn, ple=2.0, window_sec=3600, ref_rssi=-40.0,
+            ref_dist=1.0, bandwidth_m=150.0, method='accum', debug_flag=1,
+        )
+        with _cell_map_cache_lock:
+            _cell_map_cache = result
+    finally:
+        conn.close()
+
+
+def _cell_map_worker():
+    """Background thread that periodically recomputes the cell_map cache."""
+    while True:
+        try:
+            _refresh_cell_map_cache()
+        except Exception:
+            logger.exception("cell_map cache computation failed")
+        time.sleep(CELL_MAP_INTERVAL)
+
+
+def start_cell_map_timer():
+    t = threading.Thread(target=_cell_map_worker, daemon=True, name="cell-map-cache")
+    t.start()
+    logger.info("cell_map cache timer started (interval=%ds)", CELL_MAP_INTERVAL)
+    return t
+
+
+start_cell_map_timer()
+
+
+@app.route('/cell_map')
+def cell_map():
+    """セルごとに「受信電力→距離」の円の交点を投票して基地局位置を推定して返す。
+    クエリ引数:
+      - ple: パス損失指数 n（既定 2.0）
+      - window_sec: この秒数以内のログのみを対象（省略時は 3600 秒＝1時間）
+      - ref_rssi: 参照距離 ref_dist[m] における RSSI[dBm]（既定 -40）
+      - ref_dist: 参照距離[m]（既定 1.0）
+      - bandwidth_m: 交点クラスタリング半径[m]（既定 150）
+      - method: 'accum'（交点投票。既定） or 'centroid'（従来の加重重心）
+      - debug: 1 でデバッグ情報（各観測円）を返す
+    重複排除:
+      - 同一 (cell_id, type, lat, lon) のレコードが複数ある場合は、最新 (timestamp が最大) のみ利用。
+
+    デフォルトパラメータでのリクエストはバックグラウンドキャッシュを返す。
+    """
+    # デフォルトパラメータの場合はキャッシュを返す
+    if not request.args:
+        with _cell_map_cache_lock:
+            cached = _cell_map_cache
+        if cached is not None:
+            return jsonify(cached)
+
+    # カスタムパラメータまたはキャッシュ未生成の場合はオンデマンドで計算
+    ple = request.args.get('ple', default=2.0, type=float)
+    window_sec = request.args.get('window_sec', default=3600, type=int)
+    ref_rssi = request.args.get('ref_rssi', default=-40.0, type=float)
+    ref_dist = request.args.get('ref_dist', default=1.0, type=float)
+    bandwidth_m = request.args.get('bandwidth_m', default=150.0, type=float)
+    method = request.args.get('method', default='accum', type=str)
+    debug_flag = request.args.get('debug', default=1, type=int)
+
+    db = get_db()
+    result = _compute_cell_map_impl(
+        db, ple, window_sec, ref_rssi, ref_dist, bandwidth_m, method, debug_flag,
+    )
     return jsonify(result)
 
 
