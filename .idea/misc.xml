@@ -1,0 +1,12 @@
+<project version="4">
+  <component name="Black">
+    <option name="sdkName" value="Python 3.10 virtualenv at C:\Users\kureshin\cell-finder\.venv" />
+  </component>
+  <component name="ExternalStorageConfigurationManager" enabled="true" />
+  <component name="FrameworkDetectionExcludesConfiguration">
+    <file type="web" url="file://$PROJECT_DIR$/android" />
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_24" project-jdk-name="Python 3.10 virtualenv at C:\Users\kureshin\cell-finder\.venv" project-jdk-type="Python SDK">
+    <output url="file://$PROJECT_DIR$/out" />
+  </component>
+</project>
