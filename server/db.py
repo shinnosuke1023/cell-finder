@@ -37,6 +37,8 @@ def get_db():
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA cache_size=-8000")
+        conn.execute("PRAGMA temp_store=MEMORY")
         _local.db = conn
     return _local.db
 
@@ -55,6 +57,8 @@ def _get_archive_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-8000")
+    conn.execute("PRAGMA temp_store=MEMORY")
     return conn
 
 
@@ -67,8 +71,9 @@ CREATE TABLE IF NOT EXISTS logs (
     rssi INTEGER,
     cell_id TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs (timestamp);
-CREATE INDEX IF NOT EXISTS idx_logs_cell_id   ON logs (cell_id);
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp  ON logs (timestamp);
+CREATE INDEX IF NOT EXISTS idx_logs_cell_id    ON logs (cell_id);
+CREATE INDEX IF NOT EXISTS idx_logs_ts_cellid  ON logs (timestamp, cell_id);
 """
 
 

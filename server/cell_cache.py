@@ -245,6 +245,8 @@ class CellMapCache:
         conn = sqlite3.connect(self._db_path)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA cache_size=-8000")
+        conn.execute("PRAGMA temp_store=MEMORY")
 
         window_sec = self._params["window_sec"]
         cutoff_ms = int(time.time() * 1000) - window_sec * 1000
@@ -299,7 +301,7 @@ class CellMapCache:
             self._all_dirty = False
 
         if all_dirty:
-            # Full recomputation
+            # Full recomputation (lock-free: build new dict, then swap)
             logger.info("Cache: full recomputation starting...")
             t0 = time.monotonic()
             by_cell = self._fetch_logs_for_cells(cell_ids=None)
@@ -322,21 +324,26 @@ class CellMapCache:
             )
 
         elif dirty_cells:
-            # Incremental recomputation
+            # Incremental recomputation – compute OUTSIDE the lock
             t0 = time.monotonic()
             by_cell = self._fetch_logs_for_cells(cell_ids=dirty_cells)
 
+            new_results = {}
+            removed_ids = []
+            for cell_id in dirty_cells:
+                if cell_id in by_cell:
+                    info = by_cell[cell_id]
+                    new_results[cell_id] = compute_cell_position(
+                        cell_id, info["type"], info["logs"], self._params
+                    )
+                else:
+                    removed_ids.append(cell_id)
+
+            # Merge results under the lock (fast dict update only)
             with self._lock:
-                for cell_id in dirty_cells:
-                    if cell_id in by_cell:
-                        info = by_cell[cell_id]
-                        result = compute_cell_position(
-                            cell_id, info["type"], info["logs"], self._params
-                        )
-                        self._cache[cell_id] = result
-                    else:
-                        # Cell has no logs in window anymore – remove from cache
-                        self._cache.pop(cell_id, None)
+                self._cache.update(new_results)
+                for cid in removed_ids:
+                    self._cache.pop(cid, None)
                 self._last_computed = time.time()
 
             elapsed = time.monotonic() - t0
