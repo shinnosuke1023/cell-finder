@@ -44,12 +44,23 @@ FLUSH_INTERVAL = 0.25                    # seconds
 
 def _flush_write_queue():
     """Background thread: drains the queue and bulk-inserts into SQLite."""
-    conn = sqlite3.connect(REALTIME_DB)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-8000")
-    conn.execute("PRAGMA temp_store=MEMORY")
+    conn = None
+
+    def _ensure_conn():
+        nonlocal conn
+        if conn is not None:
+            return conn
+        try:
+            conn = sqlite3.connect(REALTIME_DB)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-8000")
+            conn.execute("PRAGMA temp_store=MEMORY")
+        except Exception:
+            logger.warning("write-flush: DB not ready, will retry")
+            conn = None
+        return conn
 
     while True:
         time.sleep(FLUSH_INTERVAL)
@@ -60,14 +71,20 @@ def _flush_write_queue():
                 rows.append(_write_queue.popleft())
         if not rows:
             continue
+        c = _ensure_conn()
+        if c is None:
+            # Put rows back so they aren't lost
+            _write_queue.extend(rows)
+            continue
         t0 = time.monotonic()
         try:
-            conn.executemany("INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?)", rows)
-            conn.commit()
+            c.executemany("INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?)", rows)
+            c.commit()
             elapsed = time.monotonic() - t0
             logger.info("Flushed %d rows in %.3fs", len(rows), elapsed)
         except Exception:
             logger.exception("Error flushing write queue (%d rows)", len(rows))
+            conn = None  # reset connection on error
 
 
 _flush_thread = threading.Thread(target=_flush_write_queue, daemon=True, name="write-flush")
