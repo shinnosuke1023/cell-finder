@@ -335,13 +335,11 @@
     loadCellIds();
     updateMap(true);
     checkGsmAlerts();
-    // Main data polling: 15s interval (map_data + cell_map + alerts)
     setInterval(function() {
+      loadCellIds();
       updateMap(false);
       checkGsmAlerts();
-    }, 15000);
-    // Cell ID list changes rarely – poll at 60s interval
-    setInterval(loadCellIds, 60000);
+    }, 10000);
   </script>
 </body>
 </html>

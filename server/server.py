@@ -1,6 +1,5 @@
 import collections
 import logging
-import math
 import sqlite3
 import threading
 import time
@@ -193,14 +192,9 @@ def alerts():
 
 @app.route('/map_data')
 def map_data():
-    """通常の観測ログを返す（地図表示用）
-
-    デフォルトでサーバーサイドで25mグリッド集約を行い、レスポンスサイズを大幅に削減する。
-    ?raw=1 を指定すると全行を返す（後方互換性）。
-    """
+    """通常の観測ログを返す（地図表示用）"""
     cell_id_filter = request.args.get('cell_id', None)
-    raw_mode = request.args.get('raw', '0') == '1'
-    cache_key = f"map_data:{cell_id_filter}:{raw_mode}"
+    cache_key = f"map_data:{cell_id_filter}"
 
     cached = _read_cache.get(cache_key)
     if cached is not None:
@@ -217,34 +211,11 @@ def map_data():
         params.append(cell_id_filter)
 
     rows = db.execute(query, tuple(params)).fetchall()
-
-    if raw_mode:
-        result = [
-            {"timestamp": r[0], "lat": r[1], "lon": r[2],
-             "type": r[3], "rssi": r[4], "cell_id": r[5]}
-            for r in rows
-        ]
-    else:
-        # Server-side 25m grid aggregation (matches frontend gridBucket)
-        GRID_M = 25.0
-        grid = {}
-        for ts, lat, lon, ctype, rssi, cell_id in rows:
-            if lat is None or lon is None:
-                continue
-            rssi_val = rssi if rssi is not None else -100
-            lat_deg = GRID_M / 111320.0
-            lon_deg = GRID_M / (111320.0 * math.cos(lat * math.pi / 180.0))
-            gi = int(lat / lat_deg) if lat_deg > 0 else 0
-            gj = int(lon / lon_deg) if lon_deg > 0 else 0
-            key = (gi, gj)
-            prev = grid.get(key)
-            if prev is None or rssi_val > prev["rssi"]:
-                grid[key] = {
-                    "timestamp": ts, "lat": lat, "lon": lon,
-                    "type": ctype, "rssi": rssi_val, "cell_id": cell_id
-                }
-        result = list(grid.values())
-
+    result = [
+        {"timestamp": r[0], "lat": r[1], "lon": r[2],
+         "type": r[3], "rssi": r[4], "cell_id": r[5]}
+        for r in rows
+    ]
     _read_cache.put(cache_key, result)
     return jsonify(result)
 
@@ -356,10 +327,6 @@ def history():
 @app.route('/stats')
 def stats():
     """リアルタイム層とアーカイブ層のレコード数を返す。"""
-    cached = _read_cache.get("stats")
-    if cached is not None:
-        return jsonify(cached)
-
     db = get_db()
     realtime_count = db.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
 
@@ -370,12 +337,10 @@ def stats():
     except Exception:
         archive_count = None
 
-    result = {
+    return jsonify({
         "realtime_count": realtime_count,
         "archive_count": archive_count,
-    }
-    _read_cache.put("stats", result)
-    return jsonify(result)
+    })
 
 
 # ── global error handlers ─────────────────────────────────────────────────────
