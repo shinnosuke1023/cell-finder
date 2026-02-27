@@ -1,22 +1,74 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8" />
   <title>Cell Logger Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
-    #wrapper { display: flex; flex-direction: column; height: 100%; }
-    #controls { padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; flex-shrink: 0; }
-    #controls label { margin-right: 4px; }
-    #controls select, #controls button { padding: 4px 8px; margin-right: 12px; }
-    #status { padding: 6px 12px; background: #e8f4f8; border-bottom: 1px solid #bee5eb; font-size: 0.9em; flex-shrink: 0; }
-    #gsm-alert-banner { display: none; padding: 10px 16px; background: #f8d7da; color: #721c24; border-bottom: 2px solid #f5c6cb; font-weight: bold; flex-shrink: 0; }
-    #gsm-alert-banner .close-btn { float: right; cursor: pointer; font-size: 1.2em; margin-left: 12px; }
-    #map { flex: 1; }
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
+    }
+
+    #wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    #controls {
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      flex-shrink: 0;
+    }
+
+    #controls label {
+      margin-right: 4px;
+    }
+
+    #controls select,
+    #controls button {
+      padding: 4px 8px;
+      margin-right: 12px;
+    }
+
+    #status {
+      padding: 6px 12px;
+      background: #e8f4f8;
+      border-bottom: 1px solid #bee5eb;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+
+    #gsm-alert-banner {
+      display: none;
+      padding: 10px 16px;
+      background: #f8d7da;
+      color: #721c24;
+      border-bottom: 2px solid #f5c6cb;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    #gsm-alert-banner .close-btn {
+      float: right;
+      cursor: pointer;
+      font-size: 1.2em;
+      margin-left: 12px;
+    }
+
+    #map {
+      flex: 1;
+    }
   </style>
 </head>
+
 <body>
   <div id="wrapper">
     <div id="controls">
@@ -25,6 +77,15 @@
       <label for="cellIdFilter">Cell ID:</label>
       <select id="cellIdFilter">
         <option value="">All Cell IDs</option>
+      </select>
+
+      <label for="typeFilter">Type:</label>
+      <select id="typeFilter" onchange="updateMap(false)">
+        <option value="">All</option>
+        <option value="LTE">LTE (4G)</option>
+        <option value="NR">NR (5G)</option>
+        <option value="WCDMA">WCDMA (3G)</option>
+        <option value="GSM">GSM (2G)</option>
       </select>
 
       <label for="displayMode">Mode:</label>
@@ -56,10 +117,10 @@
     var statusEl = document.getElementById('status');
 
     // Layer groups so we can clear them independently
-    var heatLayer   = L.layerGroup().addTo(map);
-    var pinLayer    = L.layerGroup().addTo(map);
-    var bsLayer     = L.layerGroup().addTo(map);
-    var debugLayer  = L.layerGroup().addTo(map);
+    var heatLayer = L.layerGroup().addTo(map);
+    var pinLayer = L.layerGroup().addTo(map);
+    var bsLayer = L.layerGroup().addTo(map);
+    var debugLayer = L.layerGroup().addTo(map);
 
     /* ── RSSI → colour (matches Android Blue→Cyan→Green→Yellow→Red) ──────── */
     function rssiToRgb(rssi) {
@@ -96,7 +157,7 @@
     function gridBucket(data, gridSizeMeters) {
       gridSizeMeters = gridSizeMeters || 25;
       var grid = {};
-      data.forEach(function(row) {
+      data.forEach(function (row) {
         if (row.lat == null || row.lon == null) return;
         var rssi = row.rssi != null ? row.rssi : -100;
         var latDeg = gridSizeMeters / 111320.0;
@@ -105,7 +166,7 @@
         var gj = Math.floor(row.lon / lonDeg);
         var key = gi + '_' + gj;
         if (!grid[key] || rssi > grid[key].rssi) {
-          grid[key] = {lat: row.lat, lon: row.lon, rssi: rssi, type: row.type, cell_id: row.cell_id, timestamp: row.timestamp};
+          grid[key] = { lat: row.lat, lon: row.lon, rssi: rssi, type: row.type, cell_id: row.cell_id, timestamp: row.timestamp };
         }
       });
       var out = [];
@@ -115,12 +176,12 @@
 
     function loadCellIds() {
       fetch('/cell_ids')
-        .then(function(r) { return r.json(); })
-        .then(function(ids) {
+        .then(function (r) { return r.json(); })
+        .then(function (ids) {
           var sel = document.getElementById('cellIdFilter');
           var prev = sel.value;
           while (sel.children.length > 1) sel.removeChild(sel.lastChild);
-          ids.forEach(function(id) {
+          ids.forEach(function (id) {
             var opt = document.createElement('option');
             opt.value = id;
             opt.textContent = id;
@@ -128,7 +189,7 @@
           });
           if (prev) sel.value = prev;
         })
-        .catch(function(e) { console.error('cell_ids error', e); });
+        .catch(function (e) { console.error('cell_ids error', e); });
     }
 
     function toggleDebug() {
@@ -143,6 +204,7 @@
     function updateMap(shouldFit) {
       var mode = document.getElementById('displayMode').value;
       var cellId = document.getElementById('cellIdFilter').value;
+      var typeFilter = document.getElementById('typeFilter').value;
       statusEl.textContent = 'Loading…';
       heatLayer.clearLayers();
       pinLayer.clearLayers();
@@ -153,11 +215,12 @@
 
       // Base stations (always shown) with debug circles
       fetch('/cell_map')
-        .then(function(r) { return r.json(); })
-        .then(function(cells) {
-          cells.forEach(function(cell) {
+        .then(function (r) { return r.json(); })
+        .then(function (cells) {
+          cells.forEach(function (cell) {
             if (cell.lat == null || cell.lon == null) return;
             if (cellId && cell.cell_id !== cellId) return;
+            if (typeFilter && cell.type !== typeFilter) return;
 
             // Red circle marker for estimated base station (matches Android red marker)
             var bsMarker = L.circleMarker([cell.lat, cell.lon], {
@@ -177,7 +240,7 @@
 
             // Debug circles showing estimated distance from each observation
             if (cell.debug && cell.debug.circles) {
-              cell.debug.circles.forEach(function(dc) {
+              cell.debug.circles.forEach(function (dc) {
                 var circle = L.circle([dc.lat, dc.lon], {
                   radius: dc.radius_m,
                   color: 'rgba(102,102,102,0.39)',
@@ -191,16 +254,19 @@
           });
           if (shouldFit) fitIfNeeded(bounds);
         })
-        .catch(function(e) { console.error('cell_map error', e); });
+        .catch(function (e) { console.error('cell_map error', e); });
 
       if (mode === 'rssi_circles') {
         // RSSI Circles mode (matches Android RSSI_CIRCLES)
         var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
         fetch(url)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (typeFilter) {
+              data = data.filter(function (row) { return row.type === typeFilter; });
+            }
             var bucketed = gridBucket(data, 25);
-            bucketed.forEach(function(row) {
+            bucketed.forEach(function (row) {
               var rssi = row.rssi != null ? row.rssi : -100;
               var cm = L.circleMarker([row.lat, row.lon], {
                 radius: 8,
@@ -220,10 +286,11 @@
               bounds.push([row.lat, row.lon]);
             });
             statusEl.textContent = 'RSSI Circles: ' + bucketed.length + ' points (from ' + data.length + ' records)' +
-              (cellId ? ' (Cell: ' + cellId + ')' : '');
+              (cellId ? ' (Cell: ' + cellId + ')' : '') +
+              (typeFilter ? ' [' + typeFilter + ']' : '');
             if (shouldFit) fitIfNeeded(bounds);
           })
-          .catch(function(e) {
+          .catch(function (e) {
             statusEl.textContent = 'Error loading RSSI circles: ' + e.message;
             console.error(e);
           });
@@ -232,10 +299,13 @@
         // Heatmap mode with grid bucketing (matches Android heatmap)
         var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
         fetch(url)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (typeFilter) {
+              data = data.filter(function (row) { return row.type === typeFilter; });
+            }
             var bucketed = gridBucket(data, 25);
-            bucketed.forEach(function(row) {
+            bucketed.forEach(function (row) {
               var rssi = row.rssi != null ? row.rssi : -100;
               var intensity = Math.max(0.1, Math.min(1.0, (rssi + 120) / 100));
               var cm = L.circleMarker([row.lat, row.lon], {
@@ -254,10 +324,11 @@
               bounds.push([row.lat, row.lon]);
             });
             statusEl.textContent = 'Heatmap: ' + bucketed.length + ' points (from ' + data.length + ' records)' +
-              (cellId ? ' (Cell: ' + cellId + ')' : '');
+              (cellId ? ' (Cell: ' + cellId + ')' : '') +
+              (typeFilter ? ' [' + typeFilter + ']' : '');
             if (shouldFit) fitIfNeeded(bounds);
           })
-          .catch(function(e) {
+          .catch(function (e) {
             statusEl.textContent = 'Error loading heatmap: ' + e.message;
             console.error(e);
           });
@@ -266,9 +337,12 @@
         // Pins mode (matches Android Pins)
         var url = '/map_data' + (cellId ? '?cell_id=' + encodeURIComponent(cellId) : '');
         fetch(url)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            data.forEach(function(row) {
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (typeFilter) {
+              data = data.filter(function (row) { return row.type === typeFilter; });
+            }
+            data.forEach(function (row) {
               if (row.lat == null || row.lon == null) return;
               var rssi = row.rssi != null ? row.rssi : -100;
               var cm = L.circleMarker([row.lat, row.lon], {
@@ -285,10 +359,12 @@
               pinLayer.addLayer(cm);
               bounds.push([row.lat, row.lon]);
             });
-            statusEl.textContent = 'Pins: ' + data.length + ' points' + (cellId ? ' (Cell: ' + cellId + ')' : '');
+            statusEl.textContent = 'Pins: ' + data.length + ' points' +
+              (cellId ? ' (Cell: ' + cellId + ')' : '') +
+              (typeFilter ? ' [' + typeFilter + ']' : '');
             if (shouldFit) fitIfNeeded(bounds);
           })
-          .catch(function(e) {
+          .catch(function (e) {
             statusEl.textContent = 'Error loading pins: ' + e.message;
             console.error(e);
           });
@@ -307,13 +383,13 @@
 
     function checkGsmAlerts() {
       fetch('/alerts')
-        .then(function(r) { return r.json(); })
-        .then(function(alerts) {
+        .then(function (r) { return r.json(); })
+        .then(function (alerts) {
           if (!alerts || alerts.length === 0) return;
           var latest = alerts[alerts.length - 1];
           if (latest.timestamp > lastAlertTimestamp && latest.timestamp > dismissedAlertTimestamp) {
             lastAlertTimestamp = latest.timestamp;
-            var cellIds = latest.gsm_cells.map(function(c) { return c.cell_id || 'Unknown'; }).join(', ');
+            var cellIds = latest.gsm_cells.map(function (c) { return c.cell_id || 'Unknown'; }).join(', ');
             var msg = latest.gsm_cells.length + ' GSM cell(s) detected';
             if (latest.lat != null && latest.lon != null) {
               msg += ' at (' + Number(latest.lat).toFixed(4) + ', ' + Number(latest.lon).toFixed(4) + ')';
@@ -323,7 +399,7 @@
             document.getElementById('gsm-alert-banner').style.display = 'block';
           }
         })
-        .catch(function(e) { console.error('alerts error', e); });
+        .catch(function (e) { console.error('alerts error', e); });
     }
 
     function dismissGsmAlert() {
@@ -336,7 +412,7 @@
     updateMap(true);
     checkGsmAlerts();
     // Main data polling: 15s interval (map_data + cell_map + alerts)
-    setInterval(function() {
+    setInterval(function () {
       updateMap(false);
       checkGsmAlerts();
     }, 15000);
@@ -344,4 +420,5 @@
     setInterval(loadCellIds, 60000);
   </script>
 </body>
+
 </html>

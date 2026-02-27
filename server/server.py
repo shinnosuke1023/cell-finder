@@ -156,7 +156,19 @@ def log():
     for cell in cells:
         cell_id = cell.get("cell_id")
         cell_type = cell.get("type")
-        rows.append((timestamp, lat, lon, cell_type, cell.get("rssi"), cell_id))
+        rssi = cell.get("rssi")
+
+        # Skip cells with abnormal RSSI (e.g. INT32_MAX = 2147483647 means unavailable)
+        if rssi is not None:
+            try:
+                rssi_val = int(rssi)
+            except (TypeError, ValueError):
+                rssi_val = None
+            if rssi_val is None or rssi_val > 0 or rssi_val < -200:
+                logger.debug("Skipping cell with invalid RSSI=%s (cell_id=%s)", rssi, cell_id)
+                continue
+
+        rows.append((timestamp, lat, lon, cell_type, rssi, cell_id))
         if cell_id is not None:
             dirty_ids.append(cell_id)
         if cell_type == "GSM":
