@@ -71,8 +71,9 @@ CREATE TABLE IF NOT EXISTS logs (
     rssi INTEGER,
     cell_id TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs (timestamp);
-CREATE INDEX IF NOT EXISTS idx_logs_cell_id   ON logs (cell_id);
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp  ON logs (timestamp);
+CREATE INDEX IF NOT EXISTS idx_logs_cell_id    ON logs (cell_id);
+CREATE INDEX IF NOT EXISTS idx_logs_ts_cellid  ON logs (timestamp, cell_id);
 """
 
 
