@@ -8,7 +8,7 @@ import time
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
-from db import ARCHIVE_DB, REALTIME_DB, close_db, get_db, init_db, start_archive_timer
+from db import ARCHIVE_DB, REALTIME_DB, RETENTION_HOURS, close_db, get_db, init_db, start_archive_timer
 from cell_cache import CellMapCache
 
 logging.basicConfig(
@@ -188,7 +188,7 @@ def alerts():
         return jsonify(cached)
 
     db = get_db()
-    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    one_hour_ago_ms = int(time.time() * 1000) - RETENTION_HOURS * 3600 * 1000
     rows = db.execute(
         "SELECT timestamp, lat, lon, rssi, cell_id FROM logs "
         "WHERE type = 'GSM' AND timestamp > ? ORDER BY timestamp",
@@ -224,7 +224,7 @@ def map_data():
         return jsonify(cached)
 
     db = get_db()
-    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    one_hour_ago_ms = int(time.time() * 1000) - RETENTION_HOURS * 3600 * 1000
 
     params = [one_hour_ago_ms]
     query = "SELECT timestamp, lat, lon, type, rssi, cell_id FROM logs WHERE timestamp > ?"
@@ -277,7 +277,7 @@ def heatmap_data():
         return jsonify(cached)
 
     db = get_db()
-    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    one_hour_ago_ms = int(time.time() * 1000) - RETENTION_HOURS * 3600 * 1000
 
     params = [one_hour_ago_ms]
     query = "SELECT lat, lon, rssi FROM logs WHERE timestamp > ?"
@@ -308,7 +308,7 @@ def get_cell_ids():
         return jsonify(cached)
 
     db = get_db()
-    one_hour_ago_ms = int(time.time() * 1000) - 3600 * 1000
+    one_hour_ago_ms = int(time.time() * 1000) - RETENTION_HOURS * 3600 * 1000
     rows = db.execute(
         "SELECT DISTINCT cell_id FROM logs WHERE timestamp > ? AND cell_id IS NOT NULL ORDER BY cell_id",
         (one_hour_ago_ms,),
