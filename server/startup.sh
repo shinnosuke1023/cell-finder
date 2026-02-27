@@ -8,4 +8,4 @@ pip install --quiet -r requirements.txt
 mkdir -p /home/data
 
 # Start gunicorn - $PORT is set by Azure App Service
-exec gunicorn --bind=0.0.0.0:${PORT:-8000} --timeout 120 --workers 2 --worker-class gthread --threads 8 wsgi:app
+exec gunicorn --bind=0.0.0.0:${PORT:-8000} --timeout 120 --workers 2 wsgi:app
