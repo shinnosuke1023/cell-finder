@@ -15,7 +15,7 @@ import sqlite3
 import threading
 import time
 
-from db import REALTIME_DB, robust_connect
+from db import REALTIME_DB, RETENTION_HOURS, robust_connect
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ DEFAULT_PARAMS = {
     "ref_rssi": -40.0,
     "ref_dist": 1.0,
     "bandwidth_m": 150.0,
-    "window_sec": 3600,
+    "window_sec": RETENTION_HOURS * 3600,
     "method": "accum",
     "debug": 1,
 }
