@@ -205,11 +205,6 @@
       var mode = document.getElementById('displayMode').value;
       var cellId = document.getElementById('cellIdFilter').value;
       var typeFilter = document.getElementById('typeFilter').value;
-      statusEl.textContent = 'Loading…';
-      heatLayer.clearLayers();
-      pinLayer.clearLayers();
-      bsLayer.clearLayers();
-      debugLayer.clearLayers();
 
       var bounds = [];
 
@@ -217,6 +212,8 @@
       fetch('/cell_map')
         .then(function (r) { return r.json(); })
         .then(function (cells) {
+          bsLayer.clearLayers();
+          debugLayer.clearLayers();
           cells.forEach(function (cell) {
             if (cell.lat == null || cell.lon == null) return;
             if (cellId && cell.cell_id !== cellId) return;
@@ -262,6 +259,8 @@
         fetch(url)
           .then(function (r) { return r.json(); })
           .then(function (data) {
+            heatLayer.clearLayers();
+            pinLayer.clearLayers();
             if (typeFilter) {
               data = data.filter(function (row) { return row.type === typeFilter; });
             }
@@ -301,6 +300,8 @@
         fetch(url)
           .then(function (r) { return r.json(); })
           .then(function (data) {
+            heatLayer.clearLayers();
+            pinLayer.clearLayers();
             if (typeFilter) {
               data = data.filter(function (row) { return row.type === typeFilter; });
             }
@@ -339,6 +340,8 @@
         fetch(url)
           .then(function (r) { return r.json(); })
           .then(function (data) {
+            heatLayer.clearLayers();
+            pinLayer.clearLayers();
             if (typeFilter) {
               data = data.filter(function (row) { return row.type === typeFilter; });
             }
