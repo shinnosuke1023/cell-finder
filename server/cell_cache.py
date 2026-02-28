@@ -360,6 +360,9 @@ class CellMapCache:
             self._recompute()
         except Exception:
             logger.exception("Cache: error during initial recomputation")
+            # Restore all_dirty so next cycle retries full recomputation
+            with self._lock:
+                self._all_dirty = True
 
         while True:
             time.sleep(self._interval)
@@ -367,6 +370,10 @@ class CellMapCache:
                 self._recompute()
             except Exception:
                 logger.exception("Cache: error during background recomputation")
+                # If cache is still empty, force a full recompute next cycle
+                with self._lock:
+                    if not self._cache:
+                        self._all_dirty = True
 
     def start(self):
         """Start the background computation thread."""
