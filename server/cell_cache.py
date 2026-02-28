@@ -219,6 +219,7 @@ class CellMapCache:
         self._lock = threading.Lock()
         self._params = dict(DEFAULT_PARAMS)
         self._last_computed = 0.0  # timestamp of last computation
+        self._full_recompute_interval = 12  # force full recompute every N cycles (12 × 5s = 60s)
 
     def mark_dirty(self, cell_ids):
         """Mark cell_ids as needing recomputation. Called from /log."""
@@ -235,6 +236,12 @@ class CellMapCache:
         """
         with self._lock:
             return list(self._cache.values())
+
+    def force_recompute(self):
+        """Force a full recomputation on the next cycle."""
+        with self._lock:
+            self._all_dirty = True
+        logger.info("Cache: full recomputation forced")
 
     def _fetch_logs_for_cells(self, cell_ids=None):
         """Fetch observation logs from DB, optionally filtered to specific cell_ids.
@@ -301,6 +308,7 @@ class CellMapCache:
             logger.info("Cache: full recomputation starting...")
             t0 = time.monotonic()
             by_cell = self._fetch_logs_for_cells(cell_ids=None)
+            logger.info("Cache: fetched %d cells from DB", len(by_cell))
 
             new_cache = {}
             for cell_id, info in by_cell.items():
@@ -310,8 +318,15 @@ class CellMapCache:
                 new_cache[cell_id] = result
 
             with self._lock:
-                self._cache = new_cache
-                self._last_computed = time.time()
+                # If full recompute found nothing but cache was already empty,
+                # mark all_dirty again so we retry on next cycle (data may still
+                # be arriving from the write-flush queue).
+                if not new_cache and not self._cache:
+                    self._all_dirty = True
+                    logger.info("Cache: full recomputation found 0 cells, will retry")
+                else:
+                    self._cache = new_cache
+                    self._last_computed = time.time()
 
             elapsed = time.monotonic() - t0
             logger.info(
@@ -362,8 +377,15 @@ class CellMapCache:
                     self._all_dirty = True
                 time.sleep(5)
 
+        cycle = 0
         while True:
             time.sleep(self._interval)
+            cycle += 1
+            # Periodically force full recomputation to pick up data already in DB
+            if cycle % self._full_recompute_interval == 0:
+                with self._lock:
+                    if not self._cache:
+                        self._all_dirty = True
             try:
                 self._recompute()
             except Exception:
