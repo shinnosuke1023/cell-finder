@@ -30,16 +30,35 @@ VACUUM_THRESHOLD = 100
 _local = threading.local()
 
 
+def robust_connect(db_path, pragmas=True):
+    """Create a SQLite connection with retry on transient OperationalError.
+
+    Azure App Service uses SMB mounts for /home/data/ which can be briefly
+    unavailable during deployments.  Retrying a few times covers the disruption
+    window (typically < 5 s).
+    """
+    last_err = None
+    for attempt in range(5):
+        try:
+            conn = sqlite3.connect(db_path)
+            if pragmas:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=5000")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA cache_size=-8000")
+                conn.execute("PRAGMA temp_store=MEMORY")
+            return conn
+        except sqlite3.OperationalError as e:
+            last_err = e
+            logger.warning("robust_connect(%s) attempt %d/5 failed: %s", db_path, attempt + 1, e)
+            time.sleep(1)
+    raise last_err  # type: ignore[misc]
+
+
 def get_db():
     """Return a per-thread SQLite connection to the realtime DB."""
     if not hasattr(_local, "db") or _local.db is None:
-        conn = sqlite3.connect(REALTIME_DB)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA cache_size=-8000")
-        conn.execute("PRAGMA temp_store=MEMORY")
-        _local.db = conn
+        _local.db = robust_connect(REALTIME_DB)
     return _local.db
 
 
@@ -53,13 +72,7 @@ def close_db():
 
 def _get_archive_db():
     """Return a new connection to the archive DB (not cached per thread)."""
-    conn = sqlite3.connect(ARCHIVE_DB)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-8000")
-    conn.execute("PRAGMA temp_store=MEMORY")
-    return conn
+    return robust_connect(ARCHIVE_DB)
 
 
 _SCHEMA_DDL = """
@@ -80,8 +93,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_ts_cellid  ON logs (timestamp, cell_id);
 def init_db():
     """Initialise both the realtime and archive databases."""
     for path in (REALTIME_DB, ARCHIVE_DB):
-        conn = sqlite3.connect(path)
+        conn = robust_connect(path, pragmas=False)
         conn.executescript(_SCHEMA_DDL)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.commit()
         conn.close()
     logger.info("Databases initialised (realtime=%s, archive=%s)", REALTIME_DB, ARCHIVE_DB)
@@ -91,10 +106,7 @@ def archive_and_cleanup():
     """Move records older than RETENTION_HOURS from realtime DB to archive DB, then VACUUM if helpful."""
     cutoff_ms = int(time.time() * 1000) - RETENTION_HOURS * 3600 * 1000
 
-    realtime = sqlite3.connect(REALTIME_DB)
-    realtime.execute("PRAGMA journal_mode=WAL")
-    realtime.execute("PRAGMA busy_timeout=5000")
-
+    realtime = robust_connect(REALTIME_DB)
     archive = _get_archive_db()
 
     try:

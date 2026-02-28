@@ -8,7 +8,7 @@ import time
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
 
-from db import ARCHIVE_DB, REALTIME_DB, RETENTION_HOURS, close_db, get_db, init_db, start_archive_timer
+from db import ARCHIVE_DB, REALTIME_DB, RETENTION_HOURS, close_db, get_db, init_db, robust_connect, start_archive_timer
 from cell_cache import CellMapCache
 
 logging.basicConfig(
@@ -51,12 +51,7 @@ def _flush_write_queue():
         if conn is not None:
             return conn
         try:
-            conn = sqlite3.connect(REALTIME_DB)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=5000")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA cache_size=-8000")
-            conn.execute("PRAGMA temp_store=MEMORY")
+            conn = robust_connect(REALTIME_DB)
         except Exception:
             logger.warning("write-flush: DB not ready, will retry")
             conn = None

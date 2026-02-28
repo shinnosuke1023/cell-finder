@@ -15,7 +15,7 @@ import sqlite3
 import threading
 import time
 
-from db import REALTIME_DB
+from db import REALTIME_DB, robust_connect
 
 logger = logging.getLogger(__name__)
 
@@ -242,11 +242,7 @@ class CellMapCache:
         Returns:
             dict: cell_id -> {"type": str, "logs": [{"lat", "lon", "rssi"}]}
         """
-        conn = sqlite3.connect(self._db_path)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        conn.execute("PRAGMA cache_size=-8000")
-        conn.execute("PRAGMA temp_store=MEMORY")
+        conn = robust_connect(self._db_path)
 
         window_sec = self._params["window_sec"]
         cutoff_ms = int(time.time() * 1000) - window_sec * 1000
@@ -355,32 +351,16 @@ class CellMapCache:
 
     def _background_loop(self):
         """Background thread main loop."""
-        # Wait for the database to become accessible before first computation
-        import os
-        for attempt in range(30):  # up to 30 seconds
-            if os.path.exists(self._db_path):
-                try:
-                    test_conn = sqlite3.connect(self._db_path)
-                    test_conn.execute("SELECT 1")
-                    test_conn.close()
-                    logger.info("Cache: DB ready at %s (attempt %d)", self._db_path, attempt + 1)
-                    break
-                except Exception:
-                    pass
-            time.sleep(1)
-        else:
-            logger.error("Cache: DB not ready after 30s at %s", self._db_path)
-
         # Initial full computation with retry
-        for attempt in range(3):
+        for attempt in range(6):
             try:
                 self._recompute()
                 break
             except Exception:
-                logger.exception("Cache: error during initial recomputation (attempt %d/3)", attempt + 1)
+                logger.exception("Cache: error during initial recomputation (attempt %d/6)", attempt + 1)
                 with self._lock:
                     self._all_dirty = True
-                time.sleep(2)
+                time.sleep(5)
 
         while True:
             time.sleep(self._interval)
@@ -388,7 +368,6 @@ class CellMapCache:
                 self._recompute()
             except Exception:
                 logger.exception("Cache: error during background recomputation")
-                # If cache is still empty, force a full recompute next cycle
                 with self._lock:
                     if not self._cache:
                         self._all_dirty = True
