@@ -30,14 +30,14 @@ VACUUM_THRESHOLD = 100
 _local = threading.local()
 
 
-def robust_connect(db_path, pragmas=True):
+def robust_connect(db_path, pragmas=True, max_retries=30):
     """Create a SQLite connection with retry on transient OperationalError.
 
     Azure App Service uses SMB mounts for /home/data/ which do NOT support
-    WAL mode.  We use the default DELETE journal mode instead.
+    WAL mode.  We use DELETE journal mode and retry on transient errors.
     """
     last_err = None
-    for attempt in range(5):
+    for attempt in range(max_retries):
         try:
             conn = sqlite3.connect(db_path)
             if pragmas:
@@ -48,7 +48,8 @@ def robust_connect(db_path, pragmas=True):
             return conn
         except sqlite3.OperationalError as e:
             last_err = e
-            logger.warning("robust_connect(%s) attempt %d/5 failed: %s", db_path, attempt + 1, e)
+            if attempt < 5 or attempt % 10 == 0:
+                logger.warning("robust_connect(%s) attempt %d/%d failed: %s", db_path, attempt + 1, max_retries, e)
             time.sleep(1)
     raise last_err  # type: ignore[misc]
 
@@ -92,6 +93,9 @@ def init_db():
     """Initialise both the realtime and archive databases."""
     for path in (REALTIME_DB, ARCHIVE_DB):
         conn = robust_connect(path, pragmas=False)
+        # Convert from WAL to DELETE mode – WAL does not work on SMB mounts.
+        # journal_mode is stored in the DB header, so this must be explicit.
+        conn.execute("PRAGMA journal_mode=DELETE")
         conn.executescript(_SCHEMA_DDL)
         conn.execute("PRAGMA busy_timeout=5000")
         conn.commit()
