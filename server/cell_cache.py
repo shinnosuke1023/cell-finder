@@ -355,14 +355,32 @@ class CellMapCache:
 
     def _background_loop(self):
         """Background thread main loop."""
-        # Initial full computation
-        try:
-            self._recompute()
-        except Exception:
-            logger.exception("Cache: error during initial recomputation")
-            # Restore all_dirty so next cycle retries full recomputation
-            with self._lock:
-                self._all_dirty = True
+        # Wait for the database to become accessible before first computation
+        import os
+        for attempt in range(30):  # up to 30 seconds
+            if os.path.exists(self._db_path):
+                try:
+                    test_conn = sqlite3.connect(self._db_path)
+                    test_conn.execute("SELECT 1")
+                    test_conn.close()
+                    logger.info("Cache: DB ready at %s (attempt %d)", self._db_path, attempt + 1)
+                    break
+                except Exception:
+                    pass
+            time.sleep(1)
+        else:
+            logger.error("Cache: DB not ready after 30s at %s", self._db_path)
+
+        # Initial full computation with retry
+        for attempt in range(3):
+            try:
+                self._recompute()
+                break
+            except Exception:
+                logger.exception("Cache: error during initial recomputation (attempt %d/3)", attempt + 1)
+                with self._lock:
+                    self._all_dirty = True
+                time.sleep(2)
 
         while True:
             time.sleep(self._interval)
